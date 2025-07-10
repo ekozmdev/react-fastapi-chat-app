@@ -1,0 +1,69 @@
+[project]
+name = "backend"
+requires-python = ">=3.13, <3.14"
+dependencies = [
+    "fastapi (>=0.116.0,<0.117.0)",
+    "uvicorn[standard] (>=0.35.0,<0.36.0)",
+    "websockets (>=15.0.1,<16.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)",
+    "openai (>=1.93.2,<2.0.0)",
+    "pydantic (>=2.11.7,<3.0.0)",
+    "python-multipart (>=0.0.20,<0.0.21)",
+    "sqlalchemy (>=2.0.41,<3.0.0)",
+    "alembic (>=1.16.3,<2.0.0)",
+    "psycopg (>=3.2.9,<4.0.0)",
+    "psycopg-binary (>=3.2.9,<4.0.0)"
+]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+pytest-asyncio = "^1.0.0"
+ruff = "^0.12.2"
+
+[tool.poetry]
+package-mode = false
+
+# ruffの設定
+# defaultの設定は以下を参照
+# https://docs.astral.sh/ruff/configuration/
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.lint]
+# チェック・修正するルール
+# ルールの詳細は以下を参照
+# https://docs.astral.sh/ruff/rules/
+select = [
+    "F",    # Pyflakes
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "C90",  # mccabe
+    "I",    # isort (ruff check --fixでisortに相当するformatが実行される)
+    "N",    # pep8-naming
+    "B",    # flake8-bugbear
+    "S",    # flake8-bandit
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+]
+# 除外するエラー
+ignore = [
+    "E501", # line-too-long: フォーマッタで調整できない場合は無視する(settingsやURLなど)
+    "S101", # assert; テストで使うので無視する
+]
+# 修正しないエラー
+unfixable = [
+    "F401", # unused import
+    "F841", # unused variable
+]
+
+[tool.ruff.format]
+# フォーマッターの設定はdefaultを使用
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
