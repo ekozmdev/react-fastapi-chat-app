@@ -1,27 +1,29 @@
 [project]
 name = "backend"
-requires-python = ">=3.13, <3.14"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
 dependencies = [
-    "fastapi (>=0.116.0,<0.117.0)",
-    "uvicorn[standard] (>=0.35.0,<0.36.0)",
-    "websockets (>=15.0.1,<16.0.0)",
-    "python-dotenv (>=1.1.1,<2.0.0)",
-    "openai (>=1.93.2,<2.0.0)",
-    "pydantic (>=2.11.7,<3.0.0)",
-    "python-multipart (>=0.0.20,<0.0.21)",
-    "sqlalchemy (>=2.0.41,<3.0.0)",
-    "alembic (>=1.16.3,<2.0.0)",
-    "psycopg (>=3.2.9,<4.0.0)",
-    "psycopg-binary (>=3.2.9,<4.0.0)"
+    "alembic>=1.16.3",
+    "fastapi>=0.116.0",
+    "openai>=1.93.3",
+    "psycopg>=3.2.9",
+    "psycopg-binary>=3.2.9",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.1.1",
+    "python-multipart>=0.0.20",
+    "sqlalchemy>=2.0.41",
+    "uvicorn[standard]>=0.35.0",
+    "websockets>=15.0.1",
 ]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.4.1"
-pytest-asyncio = "^1.0.0"
-ruff = "^0.12.2"
-
-[tool.poetry]
-package-mode = false
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+    "ruff>=0.12.2",
+]
 
 # ruffの設定
 # defaultの設定は以下を参照
@@ -61,9 +63,3 @@ unfixable = [
 
 [tool.ruff.format]
 # フォーマッターの設定はdefaultを使用
-
-[tool.mypy]
-python_version = "3.13"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
