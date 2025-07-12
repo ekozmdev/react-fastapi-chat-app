@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams, useNavigate } from 'react-router-dom';
 import './App.css';
+import { AuthProvider, useAuth } from './AuthContext';
+import LoginForm from './LoginForm';
+import ProtectedRoute from './ProtectedRoute';
 
 interface Message {
   id: string;
@@ -22,12 +26,15 @@ interface Conversation {
   message_count: number;
 }
 
-const App: React.FC = () => {
+const ChatApp: React.FC = () => {
+  const { user, logout, token } = useAuth();
+  const { conversationId: urlConversationId } = useParams<{ conversationId?: string }>();
+  const navigate = useNavigate();
   /* ----------------------- state & refs ----------------------- */
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(urlConversationId || null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
 
@@ -38,7 +45,11 @@ const App: React.FC = () => {
   /* ----------------------- fetch helpers ---------------------- */
   const fetchConversations = async () => {
     try {
-      const res = await fetch('/api/conversations');
+      const res = await fetch('/api/conversations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
       const data = await res.json();
       setConversations(data.conversations);
     } catch (err) {
@@ -48,7 +59,11 @@ const App: React.FC = () => {
 
   const fetchConversation = async (convId: string) => {
     try {
-      const res = await fetch(`/api/conversations/${convId}`);
+      const res = await fetch(`/api/conversations/${convId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
       const data = await res.json();
       setMessages(data.messages);
       setConversationId(convId);
@@ -63,15 +78,17 @@ const App: React.FC = () => {
 
     // 開発環境では直接バックエンドに接続、本番環境では相対パスを使用
     let wsUrl = '';
+    const tokenParam = `?token=${encodeURIComponent(token || '')}`;
+    
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       // 開発環境：直接バックエンドに接続
-      wsUrl = `ws://localhost:8000/ws/${convId}`;
+      wsUrl = `ws://localhost:8000/ws/${convId}${tokenParam}`;
     } else {
       // 本番環境：相対パスでNginxプロキシを使用
       if (window.location.protocol === 'https:') {
-        wsUrl = `wss://${window.location.host}/ws/${convId}`;
+        wsUrl = `wss://${window.location.host}/ws/${convId}${tokenParam}`;
       } else {
-        wsUrl = `ws://${window.location.host}/ws/${convId}`;
+        wsUrl = `ws://${window.location.host}/ws/${convId}${tokenParam}`;
       }
     }
 
@@ -127,6 +144,18 @@ const App: React.FC = () => {
     fetchConversations();          // ← await する必要はない
   }, []);
 
+  // URLパラメータの変更を監視
+  useEffect(() => {
+    if (urlConversationId && urlConversationId !== conversationId) {
+      setConversationId(urlConversationId);
+      fetchConversation(urlConversationId);
+    } else if (!urlConversationId && conversationId) {
+      // URLに会話IDがない場合はクリア
+      setConversationId(null);
+      setMessages([]);
+    }
+  }, [urlConversationId]);
+
   // WebSocketの初期化はuseEffectから削除して、メッセージ送信時に管理
   // useEffect(() => {
   //   if (conversationId) initWebSocket(conversationId);
@@ -152,6 +181,7 @@ const App: React.FC = () => {
 
   /* ----------------------- handlers --------------------------- */
   const handleNewChat = () => {
+    navigate('/');
     setConversationId(null);
     setMessages([]);
     setInputMessage('');
@@ -164,21 +194,35 @@ const App: React.FC = () => {
   };
 
   const handleSelectConversation = (conv: Conversation) => {
+    navigate(`/chat/${conv.id}`);
     setStreamingMessage(null);
     // 既存のWebSocket接続を閉じる
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
-    fetchConversation(conv.id);
   };
 
   const handleDeleteConversation = async (convId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await fetch(`/api/conversations/${convId}`, { method: 'DELETE' });
+      await fetch(`/api/conversations/${convId}`, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
       fetchConversations();
-      if (conversationId === convId) handleNewChat();
+      if (conversationId === convId) {
+        navigate('/');
+        setConversationId(null);
+        setMessages([]);
+        setStreamingMessage(null);
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+      }
     } catch (err) {
       console.error('Failed to delete conversation:', err);
     }
@@ -203,11 +247,17 @@ const App: React.FC = () => {
       // 新規チャットの場合はまず会話IDを作成
       let convId = conversationId;
       if (!convId) {
-        const res = await fetch('/api/conversations', { method: 'POST' });
+        const res = await fetch('/api/conversations', { 
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
         convId = data.conversation_id;
         setConversationId(convId);
+        navigate(`/chat/${convId}`);
       }
 
       // WebSocketが未接続または閉じている場合は接続を確立
@@ -266,6 +316,26 @@ const App: React.FC = () => {
     <div className="app">
       {/* ------------- sidebar ------------- */}
       <div className="sidebar">
+        <div className="user-info">
+          <div className="user-avatar">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="6" r="3" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M5 18c0-4 2.5-7 5-7s5 3 5 7" stroke="currentColor" strokeWidth="1.5"/>
+            </svg>
+          </div>
+          <div className="user-details">
+            <div className="username">{user?.username}</div>
+            <div className="user-email">{user?.email}</div>
+          </div>
+          <button className="logout-btn" onClick={logout} title="ログアウト">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M6 16L1 16L1 0L6 0" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M11 12L15 8L11 4" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M15 8L6 8" stroke="currentColor" strokeWidth="1.5"/>
+            </svg>
+          </button>
+        </div>
+
         <button className="new-chat-btn" onClick={handleNewChat}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -361,6 +431,60 @@ const App: React.FC = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+// ログインページ用のコンポーネント（認証済みの場合はリダイレクト）
+const LoginRoute: React.FC = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner-large"></div>
+        <p>読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    // ログイン前にいたページに戻るか、デフォルトでルートに
+    const from = location.state?.from?.pathname || '/';
+    return <Navigate to={from} replace />;
+  }
+
+  return <LoginForm />;
+};
+
+// メインAppコンポーネント
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LoginRoute />} />
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <ChatApp />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/chat/:conversationId?" 
+            element={
+              <ProtectedRoute>
+                <ChatApp />
+              </ProtectedRoute>
+            } 
+          />
+          {/* 存在しないパスは認証済みならルートへ、未認証ならログインへ */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 };
 
