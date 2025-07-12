@@ -4,11 +4,12 @@ OpenAI GPT-4を使用したチャットアプリケーション。React + Vite�
 
 ## 技術スタック
 
-- **フロントエンド**: React 18 + TypeScript + Vite 5
-- **バックエンド**: FastAPI 0.111+ + Poetry 2.1+ + Python 3.11
-- **データベース**: PostgreSQL 16
+- **フロントエンド**: React 18 + TypeScript + Vite 5 + React Router
+- **バックエンド**: FastAPI 0.116+ + uv + Python 3.13
+- **データベース**: PostgreSQL 16 + Alembic
+- **認証**: JWT + bcrypt
 - **LLM**: OpenAI GPT-4.1
-- **リアルタイム通信**: WebSocket
+- **リアルタイム通信**: WebSocket（認証付き）
 - **コンテナ**: Docker + Docker Compose
 - **Node.js**: 20.19+ または 22.12+（Vite要件）
 
@@ -46,10 +47,12 @@ llm-chat-app/
 
 ## 機能
 
-- **リアルタイムチャット**: WebSocketを使用したストリーミング応答
+- **JWT認証システム**: セキュアなユーザー認証とセッション管理
+- **リアルタイムチャット**: WebSocketを使用したストリーミング応答（認証付き）
 - **Claudeライクなデザイン**: モダンでクリーンなUI
-- **会話履歴**: PostgreSQLデータベースでチャット履歴を永続化
+- **会話履歴**: PostgreSQLデータベースでチャット履歴を永続化（ユーザー別）
 - **会話管理**: 複数の会話を作成・切り替え・削除
+- **ルーティング**: React Routerによる適切なURL管理
 - **レスポンシブデザイン**: モバイル対応
 - **高速な開発環境**: Viteによる高速HMR
 
@@ -98,22 +101,24 @@ createuser chatuser -P
 # パスワード: chatpassword
 ```
 
-#### バックエンド (Poetry)
+#### バックエンド (uv)
 ```bash
 cd backend
 
-# Poetry 2.1+のインストール（未インストールの場合）
-curl -sSL https://install.python-poetry.org | python3 -
-# または
-pipx install poetry
+# uvのインストール（未インストールの場合）
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 依存関係のインストール
-poetry install
+uv sync
 
 # データベースマイグレーション  
-poetry run alembic upgrade head
+uv run alembic upgrade head
 
-poetry run uvicorn app.main:app --reload --port 8000 --reload-dir app --log-level debug
+# 初期ユーザーの作成
+uv run scripts/manage_users.py register
+
+# 開発サーバー起動
+uv run uvicorn app.main:app --reload --port 8000 --reload-dir app --log-level debug
 ```
 
 #### フロントエンド (Vite)
@@ -127,7 +132,57 @@ npm install
 npm run dev
 ```
 
-開発サーバーは http://localhost:3000 でアクセスできます。
+## 開発サーバーの起動
+
+### 開発環境での起動手順
+
+1. **PostgreSQLを起動**
+2. **バックエンドサーバーを起動**（ターミナル1）
+   ```bash
+   cd backend
+   uv run uvicorn app.main:app --reload --port 8000
+   ```
+3. **フロントエンドサーバーを起動**（ターミナル2）
+   ```bash
+   cd frontend  
+   npm run dev
+   ```
+
+### アクセス方法
+
+- **フロントエンド**: http://localhost:3000
+- **バックエンドAPI**: http://localhost:8000
+- **API文書**: http://localhost:8000/docs (Swagger UI)
+
+### 認証システム
+
+アプリケーションは認証必須です：
+
+1. **ユーザー作成**: 管理スクリプトでユーザーを作成
+   ```bash
+   cd backend
+   uv run scripts/manage_users.py register
+   ```
+
+2. **ログイン**: フロントエンドでメールアドレスとパスワードを入力
+
+3. **動作確認用アカウント**:
+   - メール: `admin@invalid.com`
+   - パスワード: `abcd1234`
+
+### 開発時の注意点
+
+- **プロキシ設定**: Viteが `/api/*` と `/ws/*` をバックエンドにプロキシ
+- **CORS**: 開発環境では `*` を許可（本番では要変更）
+- **WebSocket認証**: URLパラメータでJWTトークンを送信
+- **自動ログイン**: JWTトークンがlocalStorageに保存される
+
+### ルーティング
+
+- `/` - メインチャット画面（認証必須）
+- `/login` - ログインページ
+- `/chat/:conversationId` - 特定の会話表示
+- 404 - 存在しないパスは `/` にリダイレクト
 
 ## 本番環境へのデプロイ
 
@@ -203,35 +258,52 @@ response = client.chat.completions.create(
 
 `frontend/src/App.css`でスタイルを調整できます。
 
-## Poetry コマンド
+## ユーザー管理
+
+アプリケーションのユーザー管理は専用スクリプトで行います：
+
+```bash
+cd backend
+
+# ユーザー一覧表示
+uv run scripts/manage_users.py list
+
+# 新規ユーザー登録（対話形式）
+uv run scripts/manage_users.py register
+
+# ユーザー有効化
+uv run scripts/manage_users.py activate user@example.com
+
+# ユーザー無効化
+uv run scripts/manage_users.py deactivate user@example.com
+
+# ユーザー削除
+uv run scripts/manage_users.py delete user@example.com
+```
+
+## uv コマンド
 
 ```bash
 # 依存関係の追加
-poetry add <package>
+uv add <package>
 
 # 開発依存関係の追加  
-poetry add --group dev <package>
+uv add --group dev <package>
 
-# 仮想環境に入る
-poetry shell
-
-# 仮想環境をアクティベート（Poetry 2.1+）
-poetry env activate
+# 依存関係のインストール
+uv sync
 
 # スクリプトの実行
-poetry run start
-
-# 依存関係の同期（Poetry 2.0+）
-poetry sync
+uv run <script>
 
 # フォーマット
-poetry run black app/
+uv run ruff format app/
 
 # リント
-poetry run ruff app/
+uv run ruff check app/
 
-# 型チェック
-poetry run mypy app/
+# テスト実行
+uv run pytest
 ```
 
 ## トラブルシューティング
