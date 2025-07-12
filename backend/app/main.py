@@ -1,7 +1,7 @@
 import json
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 import uvicorn
@@ -43,7 +43,7 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
-# パスワードハッシュ化
+# パスワードハッシュ化（bcrypt使用）
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT認証
@@ -58,8 +58,8 @@ class User(Base):
     username = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     
     # リレーション
     conversations = relationship("Conversation", back_populates="user")
@@ -70,8 +70,8 @@ class Conversation(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     title = Column(String, nullable=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     
     # リレーション
     user = relationship("User", back_populates="conversations")
@@ -89,7 +89,7 @@ class Message(Base):
     conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False)
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     conversation = relationship("Conversation", back_populates="messages")
 
 
@@ -111,9 +111,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     """JWTアクセストークンを作成"""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -275,7 +275,7 @@ async def update_user_info(
         
         current_user.password_hash = get_password_hash(update_data.new_password)
     
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = datetime.now(UTC)
     db.commit()
     
     return UserResponse(
@@ -522,7 +522,7 @@ async def ws_endpoint(ws: WebSocket, conversation_id: str):
                 first_user_msg = next((m for m in conv.messages if m.role == "user"), None)
                 if first_user_msg:
                     conv.title = first_user_msg.content[:50] + ("..." if len(first_user_msg.content) > 50 else "")
-            conv.updated_at = datetime.utcnow()
+            conv.updated_at = datetime.now(UTC)
             db.commit()
             await ws.send_json({"type": "end", "message_id": assistant_id})
 

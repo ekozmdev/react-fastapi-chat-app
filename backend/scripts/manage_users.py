@@ -15,7 +15,7 @@ import getpass
 import os
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Optional
 
@@ -37,7 +37,7 @@ DATABASE_URL = os.getenv(
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# パスワードハッシュ化
+# パスワードハッシュ化（bcrypt使用）
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # モデルをインポート
@@ -153,8 +153,8 @@ def register_user():
             username=username,
             password_hash=get_password_hash(password),
             is_active=True,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC)
         )
         
         db.add(user)
@@ -186,7 +186,7 @@ def activate_user(email: str):
             return
         
         user.is_active = True
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
         db.commit()
         
         print(f"ユーザーを有効化しました: {email}")
@@ -212,7 +212,7 @@ def deactivate_user(email: str):
             return
         
         user.is_active = False
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
         db.commit()
         
         print(f"ユーザーを無効化しました: {email}")
