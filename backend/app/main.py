@@ -7,7 +7,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from openai import OpenAI
+from openai import AsyncOpenAI
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
@@ -32,7 +32,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 # ---------- DB Models ----------
@@ -238,14 +238,14 @@ async def ws_endpoint(ws: WebSocket, conversation_id: str):
             assistant_id = str(uuid.uuid4())
             await ws.send_json({"type": "start", "message_id": assistant_id})
 
-            stream = client.chat.completions.create(
+            stream = await client.chat.completions.create(
                 model="gpt-4.1",
                 messages=api_messages,
                 max_tokens=1024,
                 temperature=0.7,
                 stream=True,
             )
-            for ch in stream:
+            async for ch in stream:
                 if ch.choices[0].delta.content:
                     chunk = ch.choices[0].delta.content
                     assistant_content += chunk
