@@ -1,18 +1,26 @@
-import json
 import os
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from openai import AsyncOpenAI
 from passlib.context import CryptContext
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, create_engine
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    create_engine,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 
@@ -60,7 +68,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-    
+
     # リレーション
     conversations = relationship("Conversation", back_populates="user")
 
@@ -72,7 +80,7 @@ class Conversation(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-    
+
     # リレーション
     user = relationship("User", back_populates="conversations")
     messages = relationship(
@@ -107,20 +115,20 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """JWTアクセストークンを作成"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
         expire = datetime.now(UTC) + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
 
-def verify_token(token: str) -> Optional[str]:
+def verify_token(token: str) -> str | None:
     """JWTトークンを検証してuser_idを返す"""
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
@@ -132,7 +140,7 @@ def verify_token(token: str) -> Optional[str]:
         return None
 
 
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+def authenticate_user(db: Session, email: str, password: str) -> User | None:
     """ユーザー認証"""
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -143,12 +151,23 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
 
 
 # ---------- Pydantic ----------
+from typing import Literal
+
 from pydantic import BaseModel
-from typing import Optional
+
 
 class ChatRequest(BaseModel):
     message: str
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
+
+
+class SSEEvent(BaseModel):
+    type: Literal["status", "content", "done", "error"]
+    message: str | None = None
+    content: str | None = None
+    message_id: str | None = None
+    tool_name: str | None = None
+    step: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -171,9 +190,9 @@ class UserResponse(BaseModel):
 
 
 class UserUpdateRequest(BaseModel):
-    username: Optional[str] = None
-    current_password: Optional[str] = None
-    new_password: Optional[str] = None
+    username: str | None = None
+    current_password: str | None = None
+    new_password: str | None = None
 
 
 # ---------- Dependency ----------
@@ -193,14 +212,14 @@ async def get_current_user(
     user_id = verify_token(credentials.credentials)
     if user_id is None:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    
+
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
-    
+
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Inactive user")
-    
+
     return user
 
 
@@ -212,10 +231,10 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     user = authenticate_user(db, login_data.email, login_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
+
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Inactive user")
-    
+
     access_token = create_access_token(data={"sub": user.id})
     return {
         "access_token": access_token,
@@ -264,20 +283,20 @@ async def update_user_info(
         if existing_user:
             raise HTTPException(status_code=400, detail="Username already exists")
         current_user.username = update_data.username
-    
+
     # パスワードの更新
     if update_data.new_password is not None:
         if update_data.current_password is None:
             raise HTTPException(status_code=400, detail="Current password is required")
-        
+
         if not verify_password(update_data.current_password, current_user.password_hash):
             raise HTTPException(status_code=400, detail="Incorrect current password")
-        
+
         current_user.password_hash = get_password_hash(update_data.new_password)
-    
+
     current_user.updated_at = datetime.now(UTC)
     db.commit()
-    
+
     return UserResponse(
         id=current_user.id,
         email=current_user.email,
@@ -359,8 +378,8 @@ async def create_conversation(
 
 @app.get("/api/conversations")
 async def list_conversations(
-    skip: int = 0, 
-    limit: int = 20, 
+    skip: int = 0,
+    limit: int = 20,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -388,7 +407,7 @@ async def list_conversations(
 
 @app.get("/api/conversations/{conversation_id}")
 async def get_conversation(
-    conversation_id: str, 
+    conversation_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -419,7 +438,7 @@ async def get_conversation(
 
 @app.delete("/api/conversations/{conversation_id}")
 async def delete_conversation(
-    conversation_id: str, 
+    conversation_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -434,48 +453,39 @@ async def delete_conversation(
     return {"message": "deleted"}
 
 
-# ---------- WebSocket ----------
-@app.websocket("/ws/{conversation_id}")
-async def ws_endpoint(ws: WebSocket, conversation_id: str):
-    # WebSocket認証 - クエリパラメータからトークンを取得
-    token = ws.query_params.get("token")
-    if not token:
-        await ws.close(code=4001, reason="Authentication required")
-        return
-    
-    user_id = verify_token(token)
-    if not user_id:
-        await ws.close(code=4001, reason="Invalid token")
-        return
-    
-    await ws.accept()
-    db = SessionLocal()
-    try:
-        # ユーザー認証
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user or not user.is_active:
-            await ws.close(code=4001, reason="User not found or inactive")
-            return
-        
-        # 会話の取得または作成
-        conv = db.query(Conversation).filter(
-            Conversation.id == conversation_id,
-            Conversation.user_id == user.id
-        ).first()
-        
-        if not conv:
-            conv = Conversation(id=conversation_id, user_id=user.id)
-            db.add(conv)
-            db.commit()
+# ---------- SSE ----------
+@app.post("/api/chat/stream/{conversation_id}")
+async def stream_chat(
+    conversation_id: str,
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """SSEによるリアルタイムチャット"""
 
-        while True:
-            data = json.loads(await ws.receive_text())
+    async def generate_sse_stream():
+        try:
+            # 会話の取得または作成
+            conv = db.query(Conversation).filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == current_user.id
+            ).first()
+
+            if not conv:
+                conv = Conversation(id=conversation_id, user_id=current_user.id)
+                db.add(conv)
+                db.commit()
+
+            # ユーザーメッセージを保存
             user_msg = Message(
-                conversation_id=conv.id, role="user", content=data["message"]
+                conversation_id=conv.id,
+                role="user",
+                content=request.message
             )
             db.add(user_msg)
             db.commit()
 
+            # API用メッセージ履歴を準備
             api_messages = [
                 {"role": m.role, "content": m.content} for m in conv.messages
             ]
@@ -487,10 +497,12 @@ async def ws_endpoint(ws: WebSocket, conversation_id: str):
                 },
             )
 
+            # ストリーミング開始
             assistant_content = ""
             assistant_id = str(uuid.uuid4())
-            await ws.send_json({"type": "start", "message_id": assistant_id})
 
+
+            # OpenAI ストリーミング開始
             stream = await client.chat.completions.create(
                 model="gpt-4.1",
                 messages=api_messages,
@@ -498,15 +510,21 @@ async def ws_endpoint(ws: WebSocket, conversation_id: str):
                 temperature=0.7,
                 stream=True,
             )
-            async for ch in stream:
-                if ch.choices[0].delta.content:
-                    chunk = ch.choices[0].delta.content
-                    assistant_content += chunk
-                    await ws.send_json(
-                        {"type": "stream", "content": chunk, "message_id": assistant_id}
+
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    assistant_content += content
+
+                    # コンテンツストリーミング
+                    content_event = SSEEvent(
+                        type="content",
+                        content=content,
+                        message_id=assistant_id
                     )
+                    yield f"data: {content_event.model_dump_json()}\n\n"
 
-
+            # アシスタントメッセージを保存
             db.add(
                 Message(
                     id=assistant_id,
@@ -516,20 +534,42 @@ async def ws_endpoint(ws: WebSocket, conversation_id: str):
                 )
             )
 
-            # --- title生成処理（WebSocket用）---
+            # タイトル生成処理
             if not conv.title and len(conv.messages) > 0:
-                # 最初のuserメッセージをタイトルに使う
                 first_user_msg = next((m for m in conv.messages if m.role == "user"), None)
                 if first_user_msg:
                     conv.title = first_user_msg.content[:50] + ("..." if len(first_user_msg.content) > 50 else "")
+
             conv.updated_at = datetime.now(UTC)
             db.commit()
-            await ws.send_json({"type": "end", "message_id": assistant_id})
 
-    except WebSocketDisconnect:
-        print("WS disconnect", conversation_id)
-    finally:
-        db.close()
+            # ストリーミング完了
+            done_event = SSEEvent(
+                type="done",
+                message_id=assistant_id
+            )
+            yield f"data: {done_event.model_dump_json()}\n\n"
+
+        except Exception as e:
+            # エラー送信
+            error_event = SSEEvent(
+                type="error",
+                message=f"エラーが発生しました: {str(e)}"
+            )
+            yield f"data: {error_event.model_dump_json()}\n\n"
+        finally:
+            db.close()
+
+    return StreamingResponse(
+        generate_sse_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Authorization",
+        }
+    )
 
 
 # ---------- run ----------

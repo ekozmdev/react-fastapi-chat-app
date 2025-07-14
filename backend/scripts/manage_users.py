@@ -15,7 +15,7 @@ import getpass
 import os
 import sys
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -23,9 +23,9 @@ from typing import Optional
 sys.path.append(str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
+from passlib.context import CryptContext
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from passlib.context import CryptContext
 
 # 環境変数を読み込み
 load_dotenv()
@@ -70,19 +70,19 @@ def list_users():
     db = SessionLocal()
     try:
         users = db.query(User).order_by(User.created_at.desc()).all()
-        
+
         if not users:
             print("登録されているユーザーはありません。")
             return
-        
+
         print(f"{'ID':<36} {'メール':<30} {'ユーザー名':<20} {'ステータス':<10} {'作成日'}")
         print("-" * 110)
-        
+
         for user in users:
             status = "有効" if user.is_active else "無効"
             created_at = user.created_at.strftime("%Y-%m-%d %H:%M")
             print(f"{user.id:<36} {user.email:<30} {user.username:<20} {status:<10} {created_at}")
-            
+
     except Exception as e:
         print(f"エラー: {e}")
     finally:
@@ -95,7 +95,7 @@ def register_user():
     try:
         print("新規ユーザー登録")
         print("-" * 20)
-        
+
         # メールアドレス入力
         while True:
             email = input("メールアドレス: ").strip()
@@ -105,14 +105,14 @@ def register_user():
             if not validate_email(email):
                 print("有効なメールアドレスを入力してください。")
                 continue
-            
+
             # 重複チェック
             existing_user = db.query(User).filter(User.email == email).first()
             if existing_user:
                 print("このメールアドレスは既に登録されています。")
                 continue
             break
-        
+
         # ユーザー名入力
         while True:
             username = input("ユーザー名: ").strip()
@@ -122,14 +122,14 @@ def register_user():
             if len(username) < 2:
                 print("ユーザー名は2文字以上で入力してください。")
                 continue
-            
+
             # 重複チェック
             existing_user = db.query(User).filter(User.username == username).first()
             if existing_user:
                 print("このユーザー名は既に使用されています。")
                 continue
             break
-        
+
         # パスワード入力
         while True:
             password = getpass.getpass("パスワード: ")
@@ -139,13 +139,13 @@ def register_user():
             if not validate_password(password):
                 print("パスワードは8文字以上で、英字と数字を含む必要があります。")
                 continue
-            
+
             password_confirm = getpass.getpass("パスワード（確認）: ")
             if password != password_confirm:
                 print("パスワードが一致しません。")
                 continue
             break
-        
+
         # ユーザー作成
         user = User(
             id=str(uuid.uuid4()),
@@ -156,15 +156,15 @@ def register_user():
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC)
         )
-        
+
         db.add(user)
         db.commit()
-        
-        print(f"\nユーザーが正常に登録されました:")
+
+        print("\nユーザーが正常に登録されました:")
         print(f"  ID: {user.id}")
         print(f"  メール: {user.email}")
         print(f"  ユーザー名: {user.username}")
-        
+
     except Exception as e:
         print(f"エラー: {e}")
         db.rollback()
@@ -180,17 +180,17 @@ def activate_user(email: str):
         if not user:
             print(f"ユーザーが見つかりません: {email}")
             return
-        
+
         if user.is_active:
             print(f"ユーザーは既に有効です: {email}")
             return
-        
+
         user.is_active = True
         user.updated_at = datetime.now(UTC)
         db.commit()
-        
+
         print(f"ユーザーを有効化しました: {email}")
-        
+
     except Exception as e:
         print(f"エラー: {e}")
         db.rollback()
@@ -206,17 +206,17 @@ def deactivate_user(email: str):
         if not user:
             print(f"ユーザーが見つかりません: {email}")
             return
-        
+
         if not user.is_active:
             print(f"ユーザーは既に無効です: {email}")
             return
-        
+
         user.is_active = False
         user.updated_at = datetime.now(UTC)
         db.commit()
-        
+
         print(f"ユーザーを無効化しました: {email}")
-        
+
     except Exception as e:
         print(f"エラー: {e}")
         db.rollback()
@@ -232,21 +232,21 @@ def delete_user(email: str):
         if not user:
             print(f"ユーザーが見つかりません: {email}")
             return
-        
+
         # 確認
         print(f"ユーザー '{user.username}' ({email}) を削除しようとしています。")
         print("このユーザーに関連する全ての会話とメッセージも削除されます。")
         confirm = input("本当に削除しますか？ (yes/no): ").strip().lower()
-        
+
         if confirm not in ["yes", "y"]:
             print("削除をキャンセルしました。")
             return
-        
+
         db.delete(user)
         db.commit()
-        
+
         print(f"ユーザーを削除しました: {email}")
-        
+
     except Exception as e:
         print(f"エラー: {e}")
         db.rollback()
@@ -257,31 +257,31 @@ def delete_user(email: str):
 def main():
     parser = argparse.ArgumentParser(description="ユーザー管理スクリプト")
     subparsers = parser.add_subparsers(dest="command", help="利用可能なコマンド")
-    
+
     # list コマンド
     subparsers.add_parser("list", help="ユーザー一覧を表示")
-    
+
     # register コマンド
     subparsers.add_parser("register", help="対話形式でユーザーを登録")
-    
+
     # activate コマンド
     activate_parser = subparsers.add_parser("activate", help="ユーザーを有効化")
     activate_parser.add_argument("email", help="ユーザーのメールアドレス")
-    
+
     # deactivate コマンド
     deactivate_parser = subparsers.add_parser("deactivate", help="ユーザーを無効化")
     deactivate_parser.add_argument("email", help="ユーザーのメールアドレス")
-    
+
     # delete コマンド
     delete_parser = subparsers.add_parser("delete", help="ユーザーを削除")
     delete_parser.add_argument("email", help="ユーザーのメールアドレス")
-    
+
     args = parser.parse_args()
-    
+
     if not args.command:
         parser.print_help()
         return
-    
+
     # コマンド実行
     if args.command == "list":
         list_users()

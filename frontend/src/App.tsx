@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams, useNavigate } from 'react-router-dom';
 import './App.css';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -40,10 +40,10 @@ const ChatApp: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   /* ----------------------- fetch helpers ---------------------- */
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     try {
       const res = await fetch('/api/conversations', {
         headers: {
@@ -55,9 +55,9 @@ const ChatApp: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch conversations:', err);
     }
-  };
+  }, [token]);
 
-  const fetchConversation = async (convId: string) => {
+  const fetchConversation = useCallback(async (convId: string) => {
     try {
       const res = await fetch(`/api/conversations/${convId}`, {
         headers: {
@@ -70,79 +70,123 @@ const ChatApp: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch conversation:', err);
     }
-  };
+  }, [token]);
 
-  /* ----------------------- websocket -------------------------- */
-  const initWebSocket = (convId: string) => {
-    if (wsRef.current) wsRef.current.close();
-
-    // 開発環境では直接バックエンドに接続、本番環境では相対パスを使用
-    let wsUrl = '';
-    const tokenParam = `?token=${encodeURIComponent(token || '')}`;
-    
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      // 開発環境：直接バックエンドに接続
-      wsUrl = `ws://localhost:8000/ws/${convId}${tokenParam}`;
-    } else {
-      // 本番環境：相対パスでNginxプロキシを使用
-      if (window.location.protocol === 'https:') {
-        wsUrl = `wss://${window.location.host}/ws/${convId}${tokenParam}`;
-      } else {
-        wsUrl = `ws://${window.location.host}/ws/${convId}${tokenParam}`;
-      }
+  /* ----------------------- SSE -------------------------- */
+  const startSSEStream = async (convId: string, message: string) => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
     }
 
-    const ws = new WebSocket(wsUrl);
-    console.log('WebSocket connecting to:', wsUrl);
+    try {
+      // SSEエンドポイントにPOSTリクエストを送信
+      const response = await fetch(`/api/chat/stream/${convId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message }),
+      });
 
-    ws.onopen = () => {
-      console.log('WebSocket connected successfully:', convId);
-    };
-
-    ws.onmessage = evt => {
-      const data = JSON.parse(evt.data);
-      switch (data.type) {
-        case 'start':
-          setStreamingMessage({ id: data.message_id, content: '', isStreaming: true });
-          break;
-        case 'stream':
-          setStreamingMessage(prev =>
-            prev ? { ...prev, content: prev.content + data.content } : prev
-          );
-          break;
-        case 'end':
-          setStreamingMessage(prev => {
-            if (prev) {
-              setMessages(m => [
-                ...m,
-                { id: data.message_id, role: 'assistant', content: prev.content, timestamp: new Date().toISOString() }
-              ]);
-            }
-            return null;
-          });
-          setIsLoading(false);
-          fetchConversations();
-          break;
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
       }
-    };
 
-    ws.onerror = err => {
-      console.error('WebSocket error:', err);
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const processSSEStream = async () => {
+        try {
+          let keepReading = true;
+          while (keepReading) {
+            const { done, value } = await reader.read();
+            if (done) {
+              keepReading = false;
+              break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  
+                  switch (data.type) {
+                    case 'status':
+                      // ステータスは表示しない
+                      break;
+                    case 'content':
+                      setStreamingMessage(prev => {
+                        if (!prev) {
+                          // 初回コンテンツの場合、新しいストリーミングメッセージを作成
+                          return {
+                            id: data.message_id,
+                            content: data.content,
+                            isStreaming: true
+                          };
+                        }
+                        return { ...prev, content: prev.content + data.content };
+                      });
+                      break;
+                    case 'done':
+                      setStreamingMessage(prev => {
+                        if (prev) {
+                          setMessages(m => [
+                            ...m,
+                            { 
+                              id: data.message_id, 
+                              role: 'assistant', 
+                              content: prev.content, 
+                              timestamp: new Date().toISOString() 
+                            }
+                          ]);
+                        }
+                        return null;
+                      });
+                      setIsLoading(false);
+                      fetchConversations();
+                      break;
+                    case 'error':
+                      console.error('SSE error:', data.message);
+                      setIsLoading(false);
+                      alert(`エラー: ${data.message}`);
+                      break;
+                  }
+                } catch (e) {
+                  console.error('Failed to parse SSE data:', e);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('SSE stream error:', error);
+          setIsLoading(false);
+        } finally {
+          reader.releaseLock();
+        }
+      };
+
+      processSSEStream();
+    } catch (error) {
+      console.error('Failed to start SSE stream:', error);
       setIsLoading(false);
-    };
-
-    ws.onclose = evt => {
-      console.log('WebSocket closed:', evt.code, evt.reason);
-      if (isLoading) setIsLoading(false);
-    };
-
-    wsRef.current = ws;
+      alert('ストリーミング接続に失敗しました。再試行してください。');
+    }
   };
 
   /* ----------------------- effects ---------------------------- */
   useEffect(() => {
-    fetchConversations();          // ← await する必要はない
-  }, []);
+    fetchConversations();
+  }, [fetchConversations]);
 
   // URLパラメータの変更を監視
   useEffect(() => {
@@ -154,22 +198,13 @@ const ChatApp: React.FC = () => {
       setConversationId(null);
       setMessages([]);
     }
-  }, [urlConversationId]);
-
-  // WebSocketの初期化はuseEffectから削除して、メッセージ送信時に管理
-  // useEffect(() => {
-  //   if (conversationId) initWebSocket(conversationId);
-
-  //   return () => {
-  //     if (wsRef.current) wsRef.current.close();
-  //   };
-  // }, [conversationId]);
+  }, [urlConversationId, conversationId, fetchConversation]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
   useEffect(() => {
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
     };
   }, []);
@@ -186,20 +221,20 @@ const ChatApp: React.FC = () => {
     setMessages([]);
     setInputMessage('');
     setStreamingMessage(null);
-    // WebSocket接続を明示的に閉じる
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    // SSE接続を明示的に閉じる
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
   };
 
   const handleSelectConversation = (conv: Conversation) => {
     navigate(`/chat/${conv.id}`);
     setStreamingMessage(null);
-    // 既存のWebSocket接続を閉じる
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    // 既存のSSE接続を閉じる
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
   };
 
@@ -218,9 +253,9 @@ const ChatApp: React.FC = () => {
         setConversationId(null);
         setMessages([]);
         setStreamingMessage(null);
-        if (wsRef.current) {
-          wsRef.current.close();
-          wsRef.current = null;
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
         }
       }
     } catch (err) {
@@ -240,6 +275,7 @@ const ChatApp: React.FC = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const messageContent = inputMessage;
     setInputMessage('');
     setIsLoading(true);
 
@@ -260,31 +296,8 @@ const ChatApp: React.FC = () => {
         navigate(`/chat/${convId}`);
       }
 
-      // WebSocketが未接続または閉じている場合は接続を確立
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        initWebSocket(convId!);
-        // WebSocket接続が確立されるまで待機
-        await new Promise((resolve, reject) => {
-          const checkConnection = () => {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-              resolve(true);
-            } else if (wsRef.current?.readyState === WebSocket.CLOSED) {
-              reject(new Error('WebSocket connection failed'));
-            } else {
-              setTimeout(checkConnection, 100);
-            }
-          };
-          checkConnection();
-        });
-      }
-
-      // WebSocket経由で送信
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ message: userMessage.content }));
-      } else {
-        setIsLoading(false);
-        alert('WebSocket接続に失敗しました。再試行してください。');
-      }
+      // SSEストリーミング開始
+      await startSSEStream(convId!, messageContent);
     } catch (err) {
       console.error('Error sending message:', err);
       setIsLoading(false);
@@ -294,7 +307,7 @@ const ChatApp: React.FC = () => {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e as any);
+      handleSubmit(e as React.FormEvent);
     }
   };
 
