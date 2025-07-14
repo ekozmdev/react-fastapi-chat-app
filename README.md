@@ -1,6 +1,6 @@
 # LLM Chat Application
 
-OpenAI GPT-4を使用したチャットアプリケーション。React + Viteフロントエンド、FastAPI + Poetry v2バックエンド、PostgreSQLデータベースで構成されています。
+OpenAI GPT-4を使用したチャットアプリケーション。React + Viteフロントエンド、FastAPI + uvバックエンド、PostgreSQLデータベースで構成されています。
 
 ## 技術スタック
 
@@ -9,7 +9,7 @@ OpenAI GPT-4を使用したチャットアプリケーション。React + Vite�
 - **データベース**: PostgreSQL 16 + Alembic
 - **認証**: JWT + bcrypt
 - **LLM**: OpenAI GPT-4.1
-- **リアルタイム通信**: WebSocket（認証付き）
+- **リアルタイム通信**: Server-Sent Events (SSE)（認証付き）
 - **コンテナ**: Docker + Docker Compose
 - **Node.js**: 20.19+ または 22.12+（Vite要件）
 
@@ -48,7 +48,7 @@ llm-chat-app/
 ## 機能
 
 - **JWT認証システム**: セキュアなユーザー認証とセッション管理
-- **リアルタイムチャット**: WebSocketを使用したストリーミング応答（認証付き）
+- **リアルタイムチャット**: Server-Sent Events (SSE)を使用したストリーミング応答（認証付き）
 - **Claudeライクなデザイン**: モダンでクリーンなUI
 - **会話履歴**: PostgreSQLデータベースでチャット履歴を永続化（ユーザー別）
 - **会話管理**: 複数の会話を作成・切り替え・削除
@@ -172,9 +172,9 @@ npm run dev
 
 ### 開発時の注意点
 
-- **プロキシ設定**: Viteが `/api/*` と `/ws/*` をバックエンドにプロキシ
+- **プロキシ設定**: Viteが `/api/*` をバックエンドにプロキシ
 - **CORS**: 開発環境では `*` を許可（本番では要変更）
-- **WebSocket認証**: URLパラメータでJWTトークンを送信
+- **SSE認証**: AuthorizationヘッダーでJWTトークンを送信
 - **自動ログイン**: JWTトークンがlocalStorageに保存される
 
 ### ルーティング
@@ -209,14 +209,21 @@ docker-compose up -d
 
 ## API仕様
 
-### WebSocket エンドポイント
-- `ws://localhost:8000/ws/{conversation_id}` - リアルタイムチャット
+### Server-Sent Events (SSE) エンドポイント
+- `POST /api/chat/stream/{conversation_id}` - リアルタイムチャットストリーミング
 
 ### REST エンドポイント
-- `POST /api/chat` - 通常のチャットリクエスト
+- `POST /api/conversations` - 新規会話の作成
 - `GET /api/conversations` - 会話一覧の取得
 - `GET /api/conversations/{conversation_id}` - 特定の会話の詳細
 - `DELETE /api/conversations/{conversation_id}` - 会話の削除
+
+### 認証エンドポイント
+- `POST /api/auth/login` - ユーザーログイン
+- `POST /api/auth/refresh` - トークンリフレッシュ
+- `GET /api/auth/me` - 現在のユーザー情報取得
+- `PUT /api/auth/me` - ユーザー情報更新
+- `DELETE /api/auth/logout` - ログアウト
 
 ## データベーススキーマ
 
@@ -313,10 +320,11 @@ uv run pytest
 - `.env`ファイルのDATABASE_URLが正しいか確認
 - Docker使用時は`docker-compose ps`でpostgresサービスが起動しているか確認
 
-### WebSocket接続エラー
+### SSE接続エラー
 - CORSの設定を確認
 - Viteのプロキシ設定を確認
 - Nginxのプロキシ設定を確認
+- Authorizationヘッダーが正しく送信されているか確認
 
 ### OpenAI APIエラー
 - `.env`ファイルのAPIキーが正しいか確認
@@ -343,8 +351,14 @@ MIT License
 
 ## 更新履歴
 
+- 2025年7月: SSE版リリース
+  - WebSocketからServer-Sent Events (SSE)への移行
+  - HTTPベースの認証（Authorizationヘッダー）
+  - Function Calling/MCP対応の基盤実装
+  - UIアニメーション最適化
+
 - 2025年6月: 最新バージョンに対応
   - React + Vite 5
-  - Poetry 2.1+
+  - Poetry → uv移行
   - OpenAI GPT-4.1モデル
   - FastAPI 0.111+

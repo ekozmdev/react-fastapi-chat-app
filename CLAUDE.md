@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a React + FastAPI chat application with real-time WebSocket communication and OpenAI GPT integration. The project uses a monorepo structure with clear frontend/backend separation:
+This is a React + FastAPI chat application with real-time Server-Sent Events (SSE) communication and OpenAI GPT integration. The project uses a monorepo structure with clear frontend/backend separation:
 
 - **Frontend**: React 18 + TypeScript + Vite 5
 - **Backend**: FastAPI + Python 3.13 + uv package manager 
@@ -58,10 +58,11 @@ compose.yaml            # Docker Compose orchestration
 ## Key Architecture Patterns
 
 ### Communication
-- **Development**: Vite dev server proxies `/api/*` and `/ws/*` to FastAPI backend
-- **Production**: Nginx serves React app and proxies API/WebSocket to FastAPI
-- **Real-time**: WebSocket streaming for chat responses at `/ws/{conversation_id}`
+- **Development**: Vite dev server proxies `/api/*` to FastAPI backend
+- **Production**: Nginx serves React app and proxies API to FastAPI
+- **Real-time**: Server-Sent Events (SSE) streaming for chat responses at `/api/chat/stream/{conversation_id}`
 - **REST API**: CRUD operations for conversations and messages
+- **Authentication**: JWT tokens via Authorization header for secure SSE connections
 
 ### Database Schema
 - `conversations`: id (UUID), title, created_at, updated_at
@@ -70,7 +71,9 @@ compose.yaml            # Docker Compose orchestration
 
 ### Technology Migration Notes
 - Recently migrated from Poetry to uv for dependency management
+- Recently migrated from WebSocket to Server-Sent Events (SSE) for better HTTP compatibility
 - Uses AsyncOpenAI client for asynchronous API calls
+- SSE provides foundation for future Function Calling/MCP tool status display
 - All code should be written in Japanese documentation style (see existing files)
 
 ## Environment Setup
