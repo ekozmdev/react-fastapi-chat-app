@@ -4,6 +4,7 @@ import './App.css';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginForm from './LoginForm';
 import ProtectedRoute from './ProtectedRoute';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface Message {
   id: string;
@@ -397,7 +398,13 @@ const ChatApp: React.FC = () => {
               <div key={msg.id} className={`message ${msg.role}`}>
                 <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
                 <div className="message-content">
-                  <div className="message-text">{msg.content}</div>
+                  <div className="message-text">
+                    {msg.role === 'assistant' ? (
+                      <MarkdownRenderer content={msg.content} />
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
                   <div className="message-time">{formatTime(msg.timestamp)}</div>
                 </div>
               </div>
@@ -408,7 +415,7 @@ const ChatApp: React.FC = () => {
                 <div className="message-avatar">AI</div>
                 <div className="message-content">
                   <div className="message-text">
-                    {streamingMessage.content}
+                    <MarkdownRenderer content={streamingMessage.content} />
                     <span className="typing-indicator">▊</span>
                   </div>
                 </div>
