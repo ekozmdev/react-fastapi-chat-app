@@ -42,6 +42,7 @@ const ChatApp: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const newChatIdRef = useRef<string | null>(null);
 
   /* ----------------------- fetch helpers ---------------------- */
   const fetchConversations = useCallback(async () => {
@@ -155,6 +156,11 @@ const ChatApp: React.FC = () => {
                       });
                       setIsLoading(false);
                       fetchConversations();
+                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
+                      if (newChatIdRef.current) {
+                        navigate(`/chat/${newChatIdRef.current}`);
+                        newChatIdRef.current = null; // クリア
+                      }
                       break;
                     case 'error':
                       console.error('SSE error:', data.message);
@@ -192,8 +198,14 @@ const ChatApp: React.FC = () => {
   // URLパラメータの変更を監視
   useEffect(() => {
     if (urlConversationId && urlConversationId !== conversationId) {
-      setConversationId(urlConversationId);
-      fetchConversation(urlConversationId);
+      // 新規チャット作成中でない場合のみfetchConversationを実行
+      if (newChatIdRef.current !== urlConversationId) {
+        setConversationId(urlConversationId);
+        fetchConversation(urlConversationId);
+      } else {
+        // 新規チャット作成中の場合はconversationIdのみ更新
+        setConversationId(urlConversationId);
+      }
     } else if (!urlConversationId && conversationId) {
       // URLに会話IDがない場合はクリア
       setConversationId(null);
@@ -222,6 +234,7 @@ const ChatApp: React.FC = () => {
     setMessages([]);
     setInputMessage('');
     setStreamingMessage(null);
+    newChatIdRef.current = null; // 新規チャットIDをクリア
     // SSE接続を明示的に閉じる
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -298,7 +311,10 @@ const ChatApp: React.FC = () => {
         const data = await res.json();
         convId = data.conversation_id;
         setConversationId(convId);
-        navigate(`/chat/${convId}`);
+        newChatIdRef.current = convId; // 新規チャットIDを保存
+        // ナビゲーションはSSE完了後に行う
+      } else {
+        newChatIdRef.current = null; // 既存チャットの場合はクリア
       }
 
       // SSEストリーミング開始
@@ -411,7 +427,7 @@ const ChatApp: React.FC = () => {
       {/* ------------- main ------------- */}
       <div className="main-content">
         <div className="chat-container">
-          {messages.length === 0 && !streamingMessage && (
+          {messages && messages.length === 0 && !streamingMessage && (
             <div className="welcome-message">
               <h1>こんにちは！</h1>
               <p>何かお手伝いできることはありますか？</p>
@@ -419,7 +435,7 @@ const ChatApp: React.FC = () => {
           )}
 
           <div className="messages">
-            {messages.map(msg => (
+            {messages && messages.map(msg => (
               <div key={msg.id} className={`message ${msg.role}`}>
                 <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
                 <div className="message-content">
