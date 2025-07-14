@@ -470,7 +470,7 @@ body {
 
 /* マークダウン表示用のスタイル */
 .markdown-content {
-  line-height: 1.6;
+  line-height: 1.4;
   word-wrap: break-word;
 }
 
@@ -560,14 +560,17 @@ body {
 .message-input {
   flex: 1;
   padding: 10px 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   font-size: 15px;
+  font-weight: normal;
   line-height: 1.6;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   resize: none;
   outline: none;
   transition: border-color 0.2s ease;
-  max-height: 200px;
+  min-height: 44px;
+  max-height: 240px;
   overflow-y: auto;
 }
 

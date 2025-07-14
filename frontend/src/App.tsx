@@ -278,6 +278,10 @@ const ChatApp: React.FC = () => {
     setMessages(prev => [...prev, userMessage]);
     const messageContent = inputMessage;
     setInputMessage('');
+    // テキストエリアの高さをリセット
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setIsLoading(true);
 
     try {
@@ -306,10 +310,31 @@ const ChatApp: React.FC = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      handleSubmit(e as React.FormEvent);
+      if (!inputMessage.trim() || isLoading) return;
+      
+      // フォームイベントを作成
+      const formEvent = {
+        preventDefault: () => {},
+        target: e.target,
+        currentTarget: e.target
+      } as React.FormEvent;
+      
+      handleSubmit(formEvent);
     }
+  };
+
+  const adjustTextareaHeight = (textarea: HTMLTextAreaElement) => {
+    textarea.style.height = 'auto';
+    // 1行約24px（line-height 1.6 × font-size 15px）× 10行 = 240px
+    const maxHeight = 24 * 10;
+    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputMessage(e.target.value);
+    adjustTextareaHeight(e.target);
   };
 
   /* ----------------------- format utils ----------------------- */
@@ -432,7 +457,7 @@ const ChatApp: React.FC = () => {
             <textarea
               ref={textareaRef}
               value={inputMessage}
-              onChange={e => setInputMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="メッセージを入力..."
               className="message-input"
@@ -446,7 +471,7 @@ const ChatApp: React.FC = () => {
             </button>
           </form>
           <div className="input-hint">
-            <kbd>Enter</kbd> で送信、<kbd>Shift + Enter</kbd> で改行
+            <kbd>Ctrl + Enter</kbd> で送信、<kbd>Enter</kbd> で改行
           </div>
         </div>
       </div>
