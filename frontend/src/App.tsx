@@ -172,7 +172,7 @@ const ChatApp: React.FC = () => {
                       if (newChatIdRef.current) {
                         navigate(`/chat/${newChatIdRef.current}`);
                         newChatIdRef.current = null; // クリア
-                        setIsCreatingNewChat(false); // 新規チャット作成完了
+                        // setIsCreatingNewChatはuseEffect内で処理完了後に設定
                       }
                       break;
                     case 'error':
@@ -213,6 +213,8 @@ const ChatApp: React.FC = () => {
     if (urlConversationId && urlConversationId !== conversationId) {
       // 新規チャット作成中の場合は何もしない
       if (isCreatingNewChat) {
+        // 新規チャット作成完了をマーク
+        setIsCreatingNewChat(false);
         return;
       }
       // 既存チャットの場合は通常通りfetchConversationを実行
