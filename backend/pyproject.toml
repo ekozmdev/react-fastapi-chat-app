@@ -36,6 +36,10 @@ dev = [
 line-length = 88
 indent-width = 4
 target-version = "py312"
+# alembic/versions配下はruffの対象外にする
+exclude = [
+    "alembic/versions/*",
+]
 
 [tool.ruff.lint]
 # チェック・修正するルール
