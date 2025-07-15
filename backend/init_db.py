@@ -7,8 +7,9 @@
 import os
 
 from dotenv import load_dotenv
-from main import Base
 from sqlalchemy import create_engine
+
+from app.main import Base
 
 load_dotenv()
 
