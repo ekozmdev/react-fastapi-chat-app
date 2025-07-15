@@ -38,6 +38,8 @@ const ChatApp: React.FC = () => {
   const [conversationId, setConversationId] = useState<string | null>(urlConversationId || null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
+  const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -61,16 +63,26 @@ const ChatApp: React.FC = () => {
 
   const fetchConversation = useCallback(async (convId: string) => {
     try {
+      setIsLoadingConversation(true);
+      // 既存メッセージをクリア（スムーズな遷移のため）
+      setMessages([]);
+      
       const res = await fetch(`/api/conversations/${convId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
       const data = await res.json();
-      setMessages(data.messages);
-      setConversationId(convId);
+      
+      // メッセージを段階的に表示（非同期）
+      setTimeout(() => {
+        setMessages(data.messages);
+        setConversationId(convId);
+        setIsLoadingConversation(false);
+      }, 50); // 少し遅延させてスムーズに表示
     } catch (err) {
       console.error('Failed to fetch conversation:', err);
+      setIsLoadingConversation(false);
     }
   }, [token]);
 
@@ -160,6 +172,7 @@ const ChatApp: React.FC = () => {
                       if (newChatIdRef.current) {
                         navigate(`/chat/${newChatIdRef.current}`);
                         newChatIdRef.current = null; // クリア
+                        setIsCreatingNewChat(false); // 新規チャット作成完了
                       }
                       break;
                     case 'error':
@@ -198,20 +211,23 @@ const ChatApp: React.FC = () => {
   // URLパラメータの変更を監視
   useEffect(() => {
     if (urlConversationId && urlConversationId !== conversationId) {
-      // 新規チャット作成中でない場合のみfetchConversationを実行
-      if (newChatIdRef.current !== urlConversationId) {
-        setConversationId(urlConversationId);
-        fetchConversation(urlConversationId);
-      } else {
-        // 新規チャット作成中の場合はconversationIdのみ更新
-        setConversationId(urlConversationId);
+      // 新規チャット作成中の場合は何もしない
+      if (isCreatingNewChat) {
+        return;
       }
+      // 既存チャットの場合は通常通りfetchConversationを実行
+      setConversationId(urlConversationId);
+      fetchConversation(urlConversationId);
     } else if (!urlConversationId && conversationId) {
+      // 新規チャット作成中またはメッセージがある場合はクリアしない
+      if (isCreatingNewChat || messages.length > 0) {
+        return;
+      }
       // URLに会話IDがない場合はクリア
       setConversationId(null);
       setMessages([]);
     }
-  }, [urlConversationId, conversationId, fetchConversation]);
+  }, [urlConversationId, conversationId, isCreatingNewChat, messages.length, fetchConversation]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
   useEffect(() => {
@@ -234,6 +250,7 @@ const ChatApp: React.FC = () => {
     setMessages([]);
     setInputMessage('');
     setStreamingMessage(null);
+    setIsCreatingNewChat(false); // 新規チャット作成フラグをクリア
     newChatIdRef.current = null; // 新規チャットIDをクリア
     // SSE接続を明示的に閉じる
     if (eventSourceRef.current) {
@@ -301,6 +318,7 @@ const ChatApp: React.FC = () => {
       // 新規チャットの場合はまず会話IDを作成
       let convId = conversationId;
       if (!convId) {
+        setIsCreatingNewChat(true); // 新規チャット作成開始
         const res = await fetch('/api/conversations', { 
           method: 'POST',
           headers: {
@@ -427,7 +445,7 @@ const ChatApp: React.FC = () => {
       {/* ------------- main ------------- */}
       <div className="main-content">
         <div className="chat-container">
-          {messages && messages.length === 0 && !streamingMessage && (
+          {messages && messages.length === 0 && !streamingMessage && !urlConversationId && (
             <div className="welcome-message">
               <h1>こんにちは！</h1>
               <p>何かお手伝いできることはありますか？</p>
@@ -435,6 +453,12 @@ const ChatApp: React.FC = () => {
           )}
 
           <div className="messages">
+            {isLoadingConversation && (
+              <div className="loading-messages">
+                <div className="spinner"></div>
+                <span>メッセージを読み込み中...</span>
+              </div>
+            )}
             {messages && messages.map(msg => (
               <div key={msg.id} className={`message ${msg.role}`}>
                 <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>

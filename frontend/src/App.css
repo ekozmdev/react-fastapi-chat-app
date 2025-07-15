@@ -249,6 +249,26 @@ body {
   border-top: 3px solid #667eea;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+}
+
+/* メッセージ読み込み中 */
+.loading-messages {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  color: #6b7280;
+  font-size: 14px;
+  justify-content: center;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
   margin-bottom: 16px;
 }
 
