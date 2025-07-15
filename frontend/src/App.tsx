@@ -219,15 +219,17 @@ const ChatApp: React.FC = () => {
       setConversationId(urlConversationId);
       fetchConversation(urlConversationId);
     } else if (!urlConversationId && conversationId) {
-      // 新規チャット作成中またはメッセージがある場合はクリアしない
-      if (isCreatingNewChat || messages.length > 0) {
+      // 新規チャット作成中の場合はクリアしない
+      if (isCreatingNewChat) {
         return;
       }
-      // URLに会話IDがない場合はクリア
-      setConversationId(null);
-      setMessages([]);
+      // URLに会話IDがない場合はクリア（handleNewChatで既にクリア済みなので重複実行を避ける）
+      if (conversationId !== null) {
+        setConversationId(null);
+        setMessages([]);
+      }
     }
-  }, [urlConversationId, conversationId, isCreatingNewChat, messages.length, fetchConversation]);
+  }, [urlConversationId, conversationId, isCreatingNewChat, fetchConversation]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
   useEffect(() => {
