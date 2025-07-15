@@ -4,6 +4,7 @@ import './App.css';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginForm from './LoginForm';
 import ProtectedRoute from './ProtectedRoute';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface Message {
   id: string;
@@ -41,6 +42,7 @@ const ChatApp: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const newChatIdRef = useRef<string | null>(null);
 
   /* ----------------------- fetch helpers ---------------------- */
   const fetchConversations = useCallback(async () => {
@@ -154,6 +156,11 @@ const ChatApp: React.FC = () => {
                       });
                       setIsLoading(false);
                       fetchConversations();
+                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
+                      if (newChatIdRef.current) {
+                        navigate(`/chat/${newChatIdRef.current}`);
+                        newChatIdRef.current = null; // クリア
+                      }
                       break;
                     case 'error':
                       console.error('SSE error:', data.message);
@@ -191,8 +198,14 @@ const ChatApp: React.FC = () => {
   // URLパラメータの変更を監視
   useEffect(() => {
     if (urlConversationId && urlConversationId !== conversationId) {
-      setConversationId(urlConversationId);
-      fetchConversation(urlConversationId);
+      // 新規チャット作成中でない場合のみfetchConversationを実行
+      if (newChatIdRef.current !== urlConversationId) {
+        setConversationId(urlConversationId);
+        fetchConversation(urlConversationId);
+      } else {
+        // 新規チャット作成中の場合はconversationIdのみ更新
+        setConversationId(urlConversationId);
+      }
     } else if (!urlConversationId && conversationId) {
       // URLに会話IDがない場合はクリア
       setConversationId(null);
@@ -221,6 +234,7 @@ const ChatApp: React.FC = () => {
     setMessages([]);
     setInputMessage('');
     setStreamingMessage(null);
+    newChatIdRef.current = null; // 新規チャットIDをクリア
     // SSE接続を明示的に閉じる
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -277,6 +291,10 @@ const ChatApp: React.FC = () => {
     setMessages(prev => [...prev, userMessage]);
     const messageContent = inputMessage;
     setInputMessage('');
+    // テキストエリアの高さをリセット
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setIsLoading(true);
 
     try {
@@ -293,7 +311,10 @@ const ChatApp: React.FC = () => {
         const data = await res.json();
         convId = data.conversation_id;
         setConversationId(convId);
-        navigate(`/chat/${convId}`);
+        newChatIdRef.current = convId; // 新規チャットIDを保存
+        // ナビゲーションはSSE完了後に行う
+      } else {
+        newChatIdRef.current = null; // 既存チャットの場合はクリア
       }
 
       // SSEストリーミング開始
@@ -305,10 +326,31 @@ const ChatApp: React.FC = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      handleSubmit(e as React.FormEvent);
+      if (!inputMessage.trim() || isLoading) return;
+      
+      // フォームイベントを作成
+      const formEvent = {
+        preventDefault: () => {},
+        target: e.target,
+        currentTarget: e.target
+      } as React.FormEvent;
+      
+      handleSubmit(formEvent);
     }
+  };
+
+  const adjustTextareaHeight = (textarea: HTMLTextAreaElement) => {
+    textarea.style.height = 'auto';
+    // 1行約24px（line-height 1.6 × font-size 15px）× 10行 = 240px
+    const maxHeight = 24 * 10;
+    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputMessage(e.target.value);
+    adjustTextareaHeight(e.target);
   };
 
   /* ----------------------- format utils ----------------------- */
@@ -385,7 +427,7 @@ const ChatApp: React.FC = () => {
       {/* ------------- main ------------- */}
       <div className="main-content">
         <div className="chat-container">
-          {messages.length === 0 && !streamingMessage && (
+          {messages && messages.length === 0 && !streamingMessage && (
             <div className="welcome-message">
               <h1>こんにちは！</h1>
               <p>何かお手伝いできることはありますか？</p>
@@ -393,11 +435,17 @@ const ChatApp: React.FC = () => {
           )}
 
           <div className="messages">
-            {messages.map(msg => (
+            {messages && messages.map(msg => (
               <div key={msg.id} className={`message ${msg.role}`}>
                 <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
                 <div className="message-content">
-                  <div className="message-text">{msg.content}</div>
+                  <div className="message-text">
+                    {msg.role === 'assistant' ? (
+                      <MarkdownRenderer content={msg.content} />
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
                   <div className="message-time">{formatTime(msg.timestamp)}</div>
                 </div>
               </div>
@@ -408,7 +456,7 @@ const ChatApp: React.FC = () => {
                 <div className="message-avatar">AI</div>
                 <div className="message-content">
                   <div className="message-text">
-                    {streamingMessage.content}
+                    <MarkdownRenderer content={streamingMessage.content} />
                     <span className="typing-indicator">▊</span>
                   </div>
                 </div>
@@ -425,7 +473,7 @@ const ChatApp: React.FC = () => {
             <textarea
               ref={textareaRef}
               value={inputMessage}
-              onChange={e => setInputMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="メッセージを入力..."
               className="message-input"
@@ -439,7 +487,7 @@ const ChatApp: React.FC = () => {
             </button>
           </form>
           <div className="input-hint">
-            <kbd>Enter</kbd> で送信、<kbd>Shift + Enter</kbd> で改行
+            <kbd>Ctrl + Enter</kbd> で送信、<kbd>Enter</kbd> で改行
           </div>
         </div>
       </div>
