@@ -74,6 +74,23 @@ cp backend/.env.example backend/.env
 # OPENAI_API_KEY=sk-...
 ```
 
+**DATABASE_URLについて**
+
+本プロジェクトではPostgreSQLドライバーとしてpsycopg3を使用しているため、DATABASE_URLのプロトコルは `postgresql+psycopg://` を指定します。
+
+```bash
+# 正しい形式（psycopg3使用）
+DATABASE_URL=postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb
+
+# 古い形式（psycopg2）は使用しない
+# DATABASE_URL=postgresql://chatuser:chatpassword@localhost:5432/chatdb
+```
+
+psycopg3の利点：
+- 非同期処理のネイティブサポート
+- 優れたパフォーマンス
+- モダンなPython 3.8+対応
+
 ### 3. Dockerを使用した起動
 
 ```bash
