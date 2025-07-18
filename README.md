@@ -4,14 +4,14 @@ OpenAI GPT-4を使用したチャットアプリケーション。React + Vite�
 
 ## 技術スタック
 
-- **フロントエンド**: React 18 + TypeScript + Vite 5 + React Router
+- **フロントエンド**: React + TypeScript + Vite + React Router
 - **バックエンド**: FastAPI 0.116+ + uv + Python 3.13
 - **データベース**: PostgreSQL 16 + Alembic
 - **認証**: JWT + bcrypt
 - **LLM**: OpenAI GPT-4.1
 - **リアルタイム通信**: Server-Sent Events (SSE)（認証付き）
 - **コンテナ**: Docker + Docker Compose
-- **Node.js**: 20.19+ または 22.12+（Vite要件）
+- **Node.js**: 22+（Vite v7要件）
 
 ## プロジェクト構成
 
@@ -36,13 +36,12 @@ llm-chat-app/
 │   ├── alembic/
 │   │   └── env.py
 │   ├── pyproject.toml
-│   ├── poetry.lock
-│   ├── alembic.ini
+│   │   ├── alembic.ini
 │   ├── .env
 │   └── Dockerfile
 ├── nginx/
 │   └── nginx.conf
-└── docker-compose.yml
+└── compose.yaml
 ```
 
 ## 機能
@@ -79,10 +78,10 @@ cp backend/.env.example backend/.env
 
 ```bash
 # Docker Composeで全サービスを起動（DB、バックエンド、フロントエンド）
-docker-compose up -d
+docker compose up -d
 
 # ログを確認
-docker-compose logs -f
+docker compose logs -f
 ```
 
 アプリケーションは http://localhost でアクセスできます。
@@ -197,14 +196,14 @@ npm run build
 
 ```bash
 cd backend
-poetry build
+uv build
 ```
 
 ### 3. Dockerイメージのビルド
 
 ```bash
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 ```
 
 ## API仕様
@@ -318,7 +317,7 @@ uv run pytest
 ### データベース接続エラー
 - PostgreSQLが起動しているか確認
 - `.env`ファイルのDATABASE_URLが正しいか確認
-- Docker使用時は`docker-compose ps`でpostgresサービスが起動しているか確認
+- Docker使用時は`docker compose ps`でpostgresサービスが起動しているか確認
 
 ### SSE接続エラー
 - CORSの設定を確認
@@ -332,17 +331,16 @@ uv run pytest
 - 使用しているモデルが利用可能か確認
 - 新しいResponses APIへの移行を検討（より高機能）
 
-### Poetry関連のエラー
+### uv関連のエラー
 ```bash
-# Poetry v2の再インストール
-curl -sSL https://install.python-poetry.org | python3 - --uninstall
-curl -sSL https://install.python-poetry.org | python3 -
+# uvの再インストール
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # キャッシュクリア
-poetry cache clear pypi --all
+uv cache clean
 
 # 依存関係の再インストール
-poetry install --no-cache
+uv sync --no-cache
 ```
 
 ## ライセンス
@@ -357,8 +355,13 @@ MIT License
   - Function Calling/MCP対応の基盤実装
   - UIアニメーション最適化
 
+- 2025年7月: Vite v7対応
+  - Vite v7.0.5にアップデート
+  - Node.js 22+要件対応
+  - Dockerfileの更新
+
 - 2025年6月: 最新バージョンに対応
-  - React + Vite 5
+  - React + Vite 7
   - Poetry → uv移行
   - OpenAI GPT-4.1モデル
   - FastAPI 0.111+

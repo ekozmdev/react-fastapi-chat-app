@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a React + FastAPI chat application with real-time Server-Sent Events (SSE) communication and OpenAI GPT integration. The project uses a monorepo structure with clear frontend/backend separation:
 
-- **Frontend**: React 18 + TypeScript + Vite 5
-- **Backend**: FastAPI + Python 3.13 + uv package manager 
-- **Database**: PostgreSQL with SQLAlchemy 2.0 + Alembic migrations
+- **Frontend**: React + TypeScript (Node.js 22+)
+- **Backend**: FastAPI (Python 3.13+) 
+- **Database**: PostgreSQL 16
 - **Infrastructure**: Docker Compose with Nginx reverse proxy
-- **LLM**: OpenAI GPT-4.1 via AsyncOpenAI client
+- **LLM**: OpenAI GPT integration
 
 ## Development Commands
 
@@ -83,16 +83,15 @@ compose.yaml            # Docker Compose orchestration
 - `DATABASE_URL`: PostgreSQL connection string
 
 ### Development Dependencies
-- Node.js 20.19+ or 22.12+ for Vite
-- Python 3.13 for backend
-- PostgreSQL 16 for database
-- uv for Python package management
+- Node.js 22+ 
+- Python 3.13+
+- PostgreSQL 16
 
 ## Code Conventions
 
 ### Python (Backend)
 - Uses ruff for linting and formatting (line length: 88)
-- Target Python version: 3.12+
+- Target Python version: 3.13+
 - SQLAlchemy 2.0 async patterns
 - FastAPI dependency injection for database sessions
 - Pydantic models for validation
