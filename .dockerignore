@@ -1,0 +1,22 @@
+# Ignore node dependencies
+node_modules/
+
+# Ignore frontend build output
+dist/
+
+# Ignore Python virtual environments
+.venv/
+venv/
+
+# Ignore Python cache
+
+# Ignore Python cache and tool caches
+__pycache__/
+.claude/
+.ruff_cache/
+
+# Ignore macOS system files
+.DS_Store
+
+# Ignore logs
+*.log
