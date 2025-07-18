@@ -19,7 +19,7 @@ config = context.config
 
 # 環境変数からDATABASE_URLを取得
 database_url = os.getenv(
-    "DATABASE_URL", "postgresql://chatuser:chatpassword@localhost:5432/chatdb"
+    "DATABASE_URL", "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
 )
 config.set_main_option("sqlalchemy.url", database_url)
 
