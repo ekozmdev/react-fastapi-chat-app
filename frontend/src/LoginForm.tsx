@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { useAuth } from './AuthContext';
 
 const LoginForm: React.FC = () => {
@@ -38,9 +39,9 @@ const LoginForm: React.FC = () => {
           {error && (
             <div className="error-message">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 1L15 15H1L8 1Z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                <path d="M8 6V10" stroke="currentColor" strokeWidth="1.5"/>
-                <circle cx="8" cy="12" r="0.5" fill="currentColor"/>
+                <path d="M8 1L15 15H1L8 1Z" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                <path d="M8 6V10" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="8" cy="12" r="0.5" fill="currentColor" />
               </svg>
               {error}
             </div>

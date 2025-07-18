@@ -1,10 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams, useNavigate } from 'react-router-dom';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Navigate,
+  Route,
+  BrowserRouter as Router,
+  Routes,
+  useLocation,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import './App.css';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginForm from './LoginForm';
-import ProtectedRoute from './ProtectedRoute';
 import MarkdownRenderer from './MarkdownRenderer';
+import ProtectedRoute from './ProtectedRoute';
 
 interface Message {
   id: string;
@@ -29,7 +38,9 @@ interface Conversation {
 
 const ChatApp: React.FC = () => {
   const { user, logout, token } = useAuth();
-  const { conversationId: urlConversationId } = useParams<{ conversationId?: string }>();
+  const { conversationId: urlConversationId } = useParams<{
+    conversationId?: string;
+  }>();
   const navigate = useNavigate();
   /* ----------------------- state & refs ----------------------- */
   const [messages, setMessages] = useState<Message[]>([]);
@@ -51,7 +62,7 @@ const ChatApp: React.FC = () => {
     try {
       const res = await fetch('/api/conversations', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
       const data = await res.json();
@@ -61,30 +72,33 @@ const ChatApp: React.FC = () => {
     }
   }, [token]);
 
-  const fetchConversation = useCallback(async (convId: string) => {
-    try {
-      setIsLoadingConversation(true);
-      // 既存メッセージをクリア（スムーズな遷移のため）
-      setMessages([]);
-      
-      const res = await fetch(`/api/conversations/${convId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      
-      // メッセージを段階的に表示（非同期）
-      setTimeout(() => {
-        setMessages(data.messages);
-        setConversationId(convId);
+  const fetchConversation = useCallback(
+    async (convId: string) => {
+      try {
+        setIsLoadingConversation(true);
+        // 既存メッセージをクリア（スムーズな遷移のため）
+        setMessages([]);
+
+        const res = await fetch(`/api/conversations/${convId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await res.json();
+
+        // メッセージを段階的に表示（非同期）
+        setTimeout(() => {
+          setMessages(data.messages);
+          setConversationId(convId);
+          setIsLoadingConversation(false);
+        }, 50); // 少し遅延させてスムーズに表示
+      } catch (err) {
+        console.error('Failed to fetch conversation:', err);
         setIsLoadingConversation(false);
-      }, 50); // 少し遅延させてスムーズに表示
-    } catch (err) {
-      console.error('Failed to fetch conversation:', err);
-      setIsLoadingConversation(false);
-    }
-  }, [token]);
+      }
+    },
+    [token]
+  );
 
   /* ----------------------- SSE -------------------------- */
   const startSSEStream = async (convId: string, message: string) => {
@@ -98,7 +112,7 @@ const ChatApp: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ message }),
       });
@@ -133,35 +147,38 @@ const ChatApp: React.FC = () => {
               if (line.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(line.slice(6));
-                  
+
                   switch (data.type) {
                     case 'status':
                       // ステータスは表示しない
                       break;
                     case 'content':
-                      setStreamingMessage(prev => {
+                      setStreamingMessage((prev) => {
                         if (!prev) {
                           // 初回コンテンツの場合、新しいストリーミングメッセージを作成
                           return {
                             id: data.message_id,
                             content: data.content,
-                            isStreaming: true
+                            isStreaming: true,
                           };
                         }
-                        return { ...prev, content: prev.content + data.content };
+                        return {
+                          ...prev,
+                          content: prev.content + data.content,
+                        };
                       });
                       break;
                     case 'done':
-                      setStreamingMessage(prev => {
+                      setStreamingMessage((prev) => {
                         if (prev) {
-                          setMessages(m => [
+                          setMessages((m) => [
                             ...m,
-                            { 
-                              id: data.message_id, 
-                              role: 'assistant', 
-                              content: prev.content, 
-                              timestamp: new Date().toISOString() 
-                            }
+                            {
+                              id: data.message_id,
+                              role: 'assistant',
+                              content: prev.content,
+                              timestamp: new Date().toISOString(),
+                            },
                           ]);
                         }
                         return null;
@@ -242,10 +259,10 @@ const ChatApp: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), [
-    messages,
-    streamingMessage
-  ]);
+  useEffect(
+    () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }),
+    [messages, streamingMessage]
+  );
 
   /* ----------------------- handlers --------------------------- */
   const handleNewChat = () => {
@@ -276,10 +293,10 @@ const ChatApp: React.FC = () => {
   const handleDeleteConversation = async (convId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await fetch(`/api/conversations/${convId}`, { 
+      await fetch(`/api/conversations/${convId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
       fetchConversations();
@@ -306,10 +323,10 @@ const ChatApp: React.FC = () => {
       id: `msg_${Date.now()}`,
       role: 'user',
       content: inputMessage,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     const messageContent = inputMessage;
     setInputMessage('');
     // テキストエリアの高さをリセット
@@ -323,10 +340,10 @@ const ChatApp: React.FC = () => {
       let convId = conversationId;
       if (!convId) {
         setIsCreatingNewChat(true); // 新規チャット作成開始
-        const res = await fetch('/api/conversations', { 
+        const res = await fetch('/api/conversations', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
@@ -351,14 +368,14 @@ const ChatApp: React.FC = () => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (!inputMessage.trim() || isLoading) return;
-      
+
       // フォームイベントを作成
       const formEvent = {
         preventDefault: () => {},
         target: e.target,
-        currentTarget: e.target
+        currentTarget: e.target,
       } as React.FormEvent;
-      
+
       handleSubmit(formEvent);
     }
   };
@@ -376,7 +393,11 @@ const ChatApp: React.FC = () => {
   };
 
   /* ----------------------- format utils ----------------------- */
-  const formatTime = (ts: string) => new Date(ts).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  const formatTime = (ts: string) =>
+    new Date(ts).toLocaleTimeString('ja-JP', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
 
   const formatDate = (ts: string) => {
     const date = new Date(ts);
@@ -396,8 +417,8 @@ const ChatApp: React.FC = () => {
         <div className="user-info">
           <div className="user-avatar">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="6" r="3" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M5 18c0-4 2.5-7 5-7s5 3 5 7" stroke="currentColor" strokeWidth="1.5"/>
+              <circle cx="10" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M5 18c0-4 2.5-7 5-7s5 3 5 7" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </div>
           <div className="user-details">
@@ -406,9 +427,9 @@ const ChatApp: React.FC = () => {
           </div>
           <button className="logout-btn" onClick={logout} title="ログアウト">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M6 16L1 16L1 0L6 0" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M11 12L15 8L11 4" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M15 8L6 8" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M6 16L1 16L1 0L6 0" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M11 12L15 8L11 4" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M15 8L6 8" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </button>
         </div>
@@ -421,7 +442,7 @@ const ChatApp: React.FC = () => {
         </button>
 
         <div className="chat-history">
-          {conversations.map(conv => (
+          {conversations.map((conv) => (
             <div
               key={conv.id}
               className={`chat-item ${conversationId === conv.id ? 'active' : ''}`}
@@ -429,15 +450,27 @@ const ChatApp: React.FC = () => {
             >
               <div className="chat-item-content">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 5L8 2L14 5V10C14 12.21 12.21 14 10 14H6C3.79 14 2 12.21 2 10V5Z" stroke="currentColor" strokeWidth="1.5" />
+                  <path
+                    d="M2 5L8 2L14 5V10C14 12.21 12.21 14 10 14H6C3.79 14 2 12.21 2 10V5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  />
                 </svg>
                 <span className="chat-item-title">{conv.title || '新しいチャット'}</span>
               </div>
               <div className="chat-item-meta">
                 <span className="chat-item-date">{formatDate(conv.updated_at)}</span>
-                <button className="chat-item-delete" onClick={e => handleDeleteConversation(conv.id, e)}>
+                <button
+                  className="chat-item-delete"
+                  onClick={(e) => handleDeleteConversation(conv.id, e)}
+                >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path
+                      d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 </button>
               </div>
@@ -463,21 +496,22 @@ const ChatApp: React.FC = () => {
                 <span>メッセージを読み込み中...</span>
               </div>
             )}
-            {messages && messages.map(msg => (
-              <div key={msg.id} className={`message ${msg.role}`}>
-                <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
-                <div className="message-content">
-                  <div className="message-text">
-                    {msg.role === 'assistant' ? (
-                      <MarkdownRenderer content={msg.content} />
-                    ) : (
-                      msg.content
-                    )}
+            {messages &&
+              messages.map((msg) => (
+                <div key={msg.id} className={`message ${msg.role}`}>
+                  <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
+                  <div className="message-content">
+                    <div className="message-text">
+                      {msg.role === 'assistant' ? (
+                        <MarkdownRenderer content={msg.content} />
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                    <div className="message-time">{formatTime(msg.timestamp)}</div>
                   </div>
-                  <div className="message-time">{formatTime(msg.timestamp)}</div>
                 </div>
-              </div>
-            ))}
+              ))}
 
             {streamingMessage && (
               <div className="message assistant">
@@ -508,7 +542,11 @@ const ChatApp: React.FC = () => {
               rows={1}
               disabled={isLoading}
             />
-            <button type="submit" className="send-button" disabled={!inputMessage.trim() || isLoading}>
+            <button
+              type="submit"
+              className="send-button"
+              disabled={!inputMessage.trim() || isLoading}
+            >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                 <path d="M2 10L18 2L14 18L10 11L2 10Z" fill="currentColor" />
               </svg>
@@ -553,21 +591,21 @@ const App: React.FC = () => {
       <Router>
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
-          <Route 
-            path="/" 
+          <Route
+            path="/"
             element={
               <ProtectedRoute>
                 <ChatApp />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/chat/:conversationId?" 
+          <Route
+            path="/chat/:conversationId?"
             element={
               <ProtectedRoute>
                 <ChatApp />
               </ProtectedRoute>
-            } 
+            }
           />
           {/* 存在しないパスは認証済みならルートへ、未認証ならログインへ */}
           <Route path="*" element={<Navigate to="/" replace />} />
