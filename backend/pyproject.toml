@@ -64,6 +64,7 @@ select = [
 ignore = [
     "E501", # line-too-long: フォーマッタで調整できない場合は無視する(settingsやURLなど)
     "S101", # assert; テストで使うので無視する
+    "B008", # TODO FastAPIの書き方と衝突しているので除外しなくてもいい様にする必要あり
 ]
 # 修正しないエラー
 unfixable = [
