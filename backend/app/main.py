@@ -1,9 +1,8 @@
 
-from pydantic import BaseModel
-from typing import Literal
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import uvicorn
 from dotenv import load_dotenv
@@ -14,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from openai import AsyncOpenAI
 from passlib.context import CryptContext
+from pydantic import BaseModel
 from sqlalchemy import (
     Boolean,
     Column,
