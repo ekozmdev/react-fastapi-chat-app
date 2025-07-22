@@ -89,7 +89,7 @@ def list_users():
         db.close()
 
 
-def register_user():
+def register_user(): # noqa: C901
     """対話形式でユーザーを登録"""
     db = SessionLocal()
     try:
