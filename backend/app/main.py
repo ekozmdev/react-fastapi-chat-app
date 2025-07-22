@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import uvicorn
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from openai import AsyncOpenAI
 from passlib.context import CryptContext
+from pydantic import BaseModel
 from sqlalchemy import (
     Boolean,
     Column,
@@ -149,9 +151,8 @@ def authenticate_user(db: Session, email: str, password: str) -> User | None:
     return user
 
 
+
 # ---------- Pydantic ----------
-from typing import Literal
-from pydantic import BaseModel
 
 
 class ChatRequest(BaseModel):

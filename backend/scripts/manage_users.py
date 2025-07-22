@@ -18,6 +18,8 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.main import User
+
 # プロジェクトのルートディレクトリをPythonパスに追加
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -40,7 +42,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # モデルをインポート
-from app.main import User
 
 
 def get_password_hash(password: str) -> str:
