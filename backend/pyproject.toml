@@ -5,28 +5,31 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "alembic>=1.16.3",
+    "alembic>=1.16.3,<2.0.0",
     "bcrypt>=3.2.0,<4.0.0",
-    "fastapi>=0.116.0",
-    "openai>=1.93.3",
-    "passlib[argon2,bcrypt]>=1.7.4",
-    "psycopg>=3.2.9",
-    "psycopg-binary>=3.2.9",
-    "pydantic>=2.11.7",
-    "python-dotenv>=1.1.1",
-    "python-jose[cryptography]>=3.5.0",
-    "python-multipart>=0.0.20",
-    "sqlalchemy>=2.0.41",
-    "uvicorn[standard]>=0.35.0",
-    "websockets>=15.0.1",
+    "fastapi>=0.116.0,<1.0.0",
+    "openai>=1.93.3,<2.0.0",
+    "passlib[argon2,bcrypt]>=1.7.4,<2.0.0",
+    "psycopg>=3.2.9,<4.0.0",
+    "psycopg-binary>=3.2.9,<4.0.0",
+    "pydantic>=2.11.7,<3.0.0",
+    "python-dotenv>=1.1.1,<2.0.0",
+    "python-jose[cryptography]>=3.5.0,<4.0.0",
+    "python-multipart>=0.0.20,<1.0.0",
+    "sqlalchemy>=2.0.41,<3.0.0",
+    "uvicorn[standard]>=0.35.0,<1.0.0",
+    "websockets>=15.0.1,<16.0.0",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.0.0",
-    "ruff>=0.12.2",
+    "pytest>=8.4.1,<9.0.0",
+    "pytest-asyncio>=1.0.0,<2.0.0",
+    "ruff>=0.12.2,<1.0.0",
 ]
+
+[tool.uv]
+add-bounds="major"
 
 # ruffの設定
 # defaultの設定は以下を参照
