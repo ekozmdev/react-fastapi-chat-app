@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import type React from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
 
 // 型定義
 interface User {
@@ -40,7 +41,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const response = await fetch('/api/auth/me', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -81,7 +82,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
         }
       } else {
-        setAuthState(prev => ({
+        setAuthState((prev) => ({
           ...prev,
           isLoading: false,
         }));
@@ -147,7 +148,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${authState.token}`,
+          Authorization: `Bearer ${authState.token}`,
         },
       });
 
@@ -156,7 +157,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { access_token } = data;
 
         localStorage.setItem('auth_token', access_token);
-        setAuthState(prev => ({
+        setAuthState((prev) => ({
           ...prev,
           token: access_token,
         }));
@@ -174,7 +175,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ユーザー情報更新
   const updateUser = (userData: Partial<User>) => {
-    setAuthState(prev => ({
+    setAuthState((prev) => ({
       ...prev,
       user: prev.user ? { ...prev.user, ...userData } : null,
     }));
