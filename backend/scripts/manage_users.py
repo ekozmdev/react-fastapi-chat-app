@@ -10,7 +10,6 @@
     python scripts/manage_users.py delete user@example.com       # ユーザー削除
 """
 
-
 import argparse
 import getpass
 import os
@@ -18,8 +17,7 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-
-from app.main import User
+from typing import Optional
 
 # プロジェクトのルートディレクトリをPythonパスに追加
 sys.path.append(str(Path(__file__).parent.parent))
@@ -43,6 +41,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # モデルをインポート
+from app.main import User
 
 
 def get_password_hash(password: str) -> str:
