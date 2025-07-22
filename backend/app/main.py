@@ -176,7 +176,7 @@ class LoginRequest(BaseModel):
 
 class Token(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105
     expires_in: int
 
 
@@ -573,7 +573,7 @@ async def stream_chat(
 
 # ---------- run ----------
 def start():
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)  # noqa: S104
 
 
 if __name__ == "__main__":
