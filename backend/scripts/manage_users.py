@@ -10,6 +10,8 @@
     python scripts/manage_users.py delete user@example.com       # ユーザー削除
 """
 
+
+from app.main import User
 import argparse
 import getpass
 import os
@@ -17,7 +19,6 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 # プロジェクトのルートディレクトリをPythonパスに追加
 sys.path.append(str(Path(__file__).parent.parent))

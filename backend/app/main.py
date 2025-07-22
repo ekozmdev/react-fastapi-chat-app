@@ -1,7 +1,9 @@
+
+from pydantic import BaseModel
+from typing import Literal
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 import uvicorn
 from dotenv import load_dotenv
@@ -150,10 +152,7 @@ def authenticate_user(db: Session, email: str, password: str) -> User | None:
     return user
 
 
-# ---------- Pydantic ----------
-from typing import Literal
 
-from pydantic import BaseModel
 
 
 class ChatRequest(BaseModel):
