@@ -1,7 +1,7 @@
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Optional
+from typing import Literal
 
 import uvicorn
 from dotenv import load_dotenv
@@ -12,6 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from openai import AsyncOpenAI
 from passlib.context import CryptContext
+from pydantic import BaseModel
 from sqlalchemy import (
     Boolean,
     Column,
@@ -150,10 +151,8 @@ def authenticate_user(db: Session, email: str, password: str) -> User | None:
     return user
 
 
-# ---------- Pydantic ----------
-from typing import Literal
 
-from pydantic import BaseModel
+# ---------- Pydantic ----------
 
 
 class ChatRequest(BaseModel):
@@ -177,7 +176,7 @@ class LoginRequest(BaseModel):
 
 class Token(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105
     expires_in: int
 
 
@@ -574,7 +573,7 @@ async def stream_chat(
 
 # ---------- run ----------
 def start():
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)  # noqa: S104
 
 
 if __name__ == "__main__":

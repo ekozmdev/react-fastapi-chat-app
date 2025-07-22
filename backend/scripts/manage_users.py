@@ -17,7 +17,8 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
+
+from app.main import User
 
 # プロジェクトのルートディレクトリをPythonパスに追加
 sys.path.append(str(Path(__file__).parent.parent))
@@ -41,7 +42,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # モデルをインポート
-from app.main import User
 
 
 def get_password_hash(password: str) -> str:
@@ -89,7 +89,7 @@ def list_users():
         db.close()
 
 
-def register_user():
+def register_user(): # noqa: C901
     """対話形式でユーザーを登録"""
     db = SessionLocal()
     try:
