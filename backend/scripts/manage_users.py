@@ -75,13 +75,17 @@ def list_users():
             print("登録されているユーザーはありません。")
             return
 
-        print(f"{'ID':<36} {'メール':<30} {'ユーザー名':<20} {'ステータス':<10} {'作成日'}")
+        print(
+            f"{'ID':<36} {'メール':<30} {'ユーザー名':<20} {'ステータス':<10} {'作成日'}"
+        )
         print("-" * 110)
 
         for user in users:
             status = "有効" if user.is_active else "無効"
             created_at = user.created_at.strftime("%Y-%m-%d %H:%M")
-            print(f"{user.id:<36} {user.email:<30} {user.username:<20} {status:<10} {created_at}")
+            print(
+                f"{user.id:<36} {user.email:<30} {user.username:<20} {status:<10} {created_at}"
+            )
 
     except Exception as e:
         print(f"エラー: {e}")
@@ -89,7 +93,7 @@ def list_users():
         db.close()
 
 
-def register_user(): # noqa: C901
+def register_user():  # noqa: C901
     """対話形式でユーザーを登録"""
     db = SessionLocal()
     try:
@@ -154,7 +158,7 @@ def register_user(): # noqa: C901
             password_hash=get_password_hash(password),
             is_active=True,
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
 
         db.add(user)

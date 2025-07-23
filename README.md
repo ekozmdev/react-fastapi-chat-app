@@ -8,7 +8,7 @@ OpenAI GPT-4を使用したチャットアプリケーション。React + Vite�
 - **バックエンド**: FastAPI 0.116+ + uv + Python 3.13
 - **データベース**: PostgreSQL 16 + Alembic
 - **認証**: JWT + bcrypt
-- **LLM**: OpenAI GPT-4.1
+- **LLM**: OpenAI GPT-4o (via openai-agents-python SDK)
 - **リアルタイム通信**: Server-Sent Events (SSE)（認証付き）
 - **コンテナ**: Docker + Docker Compose
 - **Node.js**: 22+（Vite v7要件）
@@ -258,24 +258,28 @@ docker compose up -d
 
 ## カスタマイズ
 
-### LLMモデルの変更
+### LLMモデル・設定の変更
 
 `backend/app/main.py`の以下の部分を変更：
 ```python
-response = client.chat.completions.create(
-    model="gpt-4.1",  # ここを変更
-    messages=api_messages,
-    max_tokens=1024,
-    temperature=0.7
+# Agents SDK設定
+chat_agent = Agent(
+    name="ChatAssistant",
+    instructions="You are a helpful assistant. Please respond in the same language as the user's input.",
+    model="gpt-4o",  # ここを変更
+    model_settings=ModelSettings(
+        max_tokens=1024,  # ここを変更
+        temperature=0.7,  # ここを変更
+    )
 )
 ```
 
-利用可能なモデル（2025年6月時点）:
-- `gpt-4.1` (最新・推奨)
-- `gpt-4.1-mini` (高速・低コスト)
-- `gpt-4.1-nano` (最速・最低コスト)
-- `gpt-4o` (旧モデル)
+利用可能なモデル（openai-agents-python SDK経由）:
+- `gpt-4o` (推奨・現在使用中)
+- `gpt-4o-mini` (高速・低コスト)
 - `gpt-3.5-turbo` (旧モデル)
+- `o1-preview` (推論特化)
+- `o1-mini` (推論特化・軽量)
 
 ### デザインのカスタマイズ
 
@@ -365,6 +369,13 @@ uv sync --no-cache
 MIT License
 
 ## 更新履歴
+
+- 2025年7月: openai-agents-python SDK導入
+  - 直接のOpenAI API呼び出しからopenai-agents-python SDKに移行
+  - モデル: GPT-4.1 → GPT-4o
+  - システムプロンプトをAgent.instructionsで管理
+  - 将来的なエージェント機能拡張の基盤構築
+  - 既存のSSEストリーミング機能は完全維持
 
 - 2025年7月: SSE版リリース
   - WebSocketからServer-Sent Events (SSE)への移行

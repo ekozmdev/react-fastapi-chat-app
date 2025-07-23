@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 import uvicorn
+from agents import Agent, ModelSettings, Runner
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,10 +48,23 @@ Base = declarative_base()
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Agents SDK設定
+chat_agent = Agent(
+    name="ChatAssistant",
+    instructions="You are a helpful assistant. Please respond in the same language as the user's input.",
+    model="gpt-4o",
+    model_settings=ModelSettings(
+        max_tokens=1024,
+        temperature=0.7,
+    ),
+)
+
 # JWT設定
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
+)
 
 # パスワードハッシュ化（bcrypt使用）
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -68,7 +82,9 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
 
     # リレーション
     conversations = relationship("Conversation", back_populates="user")
@@ -80,7 +96,9 @@ class Conversation(Base):
     title = Column(String, nullable=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
 
     # リレーション
     user = relationship("User", back_populates="conversations")
@@ -151,7 +169,6 @@ def authenticate_user(db: Session, email: str, password: str) -> User | None:
     return user
 
 
-
 # ---------- Pydantic ----------
 
 
@@ -205,12 +222,14 @@ def get_db() -> Session:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> User:
     """現在のユーザーを取得"""
     user_id = verify_token(credentials.credentials)
     if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        raise HTTPException(
+            status_code=401, detail="Invalid authentication credentials"
+        )
 
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -220,7 +239,6 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Inactive user")
 
     return user
-
 
 
 # ---------- 認証エンドポイント ----------
@@ -238,7 +256,7 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "expires_in": JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        "expires_in": JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     }
 
 
@@ -249,7 +267,7 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "expires_in": JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        "expires_in": JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     }
 
 
@@ -261,7 +279,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         email=current_user.email,
         username=current_user.username,
         is_active=current_user.is_active,
-        created_at=current_user.created_at
+        created_at=current_user.created_at,
     )
 
 
@@ -269,16 +287,17 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 async def update_user_info(
     update_data: UserUpdateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """ユーザー情報を更新"""
     # ユーザー名の更新
     if update_data.username is not None:
         # 重複チェック
-        existing_user = db.query(User).filter(
-            User.username == update_data.username,
-            User.id != current_user.id
-        ).first()
+        existing_user = (
+            db.query(User)
+            .filter(User.username == update_data.username, User.id != current_user.id)
+            .first()
+        )
         if existing_user:
             raise HTTPException(status_code=400, detail="Username already exists")
         current_user.username = update_data.username
@@ -288,7 +307,9 @@ async def update_user_info(
         if update_data.current_password is None:
             raise HTTPException(status_code=400, detail="Current password is required")
 
-        if not verify_password(update_data.current_password, current_user.password_hash):
+        if not verify_password(
+            update_data.current_password, current_user.password_hash
+        ):
             raise HTTPException(status_code=400, detail="Incorrect current password")
 
         current_user.password_hash = get_password_hash(update_data.new_password)
@@ -301,7 +322,7 @@ async def update_user_info(
         email=current_user.email,
         username=current_user.username,
         is_active=current_user.is_active,
-        created_at=current_user.created_at
+        created_at=current_user.created_at,
     )
 
 
@@ -362,8 +383,7 @@ async def logout(current_user: User = Depends(get_current_user)):
 
 @app.post("/api/conversations")
 async def create_conversation(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     conv = Conversation(user_id=current_user.id)
     db.add(conv)
@@ -380,7 +400,7 @@ async def list_conversations(
     skip: int = 0,
     limit: int = 20,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     convs = (
         db.query(Conversation)
@@ -408,12 +428,15 @@ async def list_conversations(
 async def get_conversation(
     conversation_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    conv = db.query(Conversation).filter(
-        Conversation.id == conversation_id,
-        Conversation.user_id == current_user.id
-    ).first()
+    conv = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id, Conversation.user_id == current_user.id
+        )
+        .first()
+    )
     if not conv:
         raise HTTPException(404, "Conversation not found")
     return {
@@ -439,12 +462,15 @@ async def get_conversation(
 async def delete_conversation(
     conversation_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    conv = db.query(Conversation).filter(
-        Conversation.id == conversation_id,
-        Conversation.user_id == current_user.id
-    ).first()
+    conv = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id, Conversation.user_id == current_user.id
+        )
+        .first()
+    )
     if not conv:
         raise HTTPException(404, "Conversation not found")
     db.delete(conv)
@@ -458,17 +484,21 @@ async def stream_chat(
     conversation_id: str,
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """SSEによるリアルタイムチャット"""
 
     async def generate_sse_stream():
         try:
             # 会話の取得または作成
-            conv = db.query(Conversation).filter(
-                Conversation.id == conversation_id,
-                Conversation.user_id == current_user.id
-            ).first()
+            conv = (
+                db.query(Conversation)
+                .filter(
+                    Conversation.id == conversation_id,
+                    Conversation.user_id == current_user.id,
+                )
+                .first()
+            )
 
             if not conv:
                 conv = Conversation(id=conversation_id, user_id=current_user.id)
@@ -477,51 +507,45 @@ async def stream_chat(
 
             # ユーザーメッセージを保存
             user_msg = Message(
-                conversation_id=conv.id,
-                role="user",
-                content=request.message
+                conversation_id=conv.id, role="user", content=request.message
             )
             db.add(user_msg)
             db.commit()
 
-            # API用メッセージ履歴を準備
+            # API用メッセージ履歴を準備（システムメッセージは除外）
             api_messages = [
                 {"role": m.role, "content": m.content} for m in conv.messages
             ]
-            api_messages.insert(
-                0,
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant. Please respond in the same language as the user's input.",
-                },
-            )
 
             # ストリーミング開始
             assistant_content = ""
             assistant_id = str(uuid.uuid4())
 
+            # Agents SDK でストリーミング実行
+            result = Runner.run_streamed(chat_agent, api_messages)
 
-            # OpenAI ストリーミング開始
-            stream = await client.chat.completions.create(
-                model="gpt-4.1",
-                messages=api_messages,
-                max_tokens=1024,
-                temperature=0.7,
-                stream=True,
-            )
+            async for event in result.stream_events():
+                if event.type == "raw_response_event":
+                    # delta の存在と内容を慎重にチェック
+                    if (
+                        hasattr(event, "data")
+                        and hasattr(event.data, "delta")
+                        and event.data.delta is not None
+                        and isinstance(event.data.delta, str)
+                    ):
+                        content = str(event.data.delta)
+                        assistant_content += content
 
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    assistant_content += content
-
-                    # コンテンツストリーミング
-                    content_event = SSEEvent(
-                        type="content",
-                        content=content,
-                        message_id=assistant_id
-                    )
-                    yield f"data: {content_event.model_dump_json()}\n\n"
+                        # コンテンツストリーミング
+                        content_event = SSEEvent(
+                            type="content", content=content, message_id=assistant_id
+                        )
+                        yield f"data: {content_event.model_dump_json()}\n\n"
+                    else:
+                        # デバッグ用: 予期しない形式をログ出力
+                        print(
+                            f"Unexpected event.data format: {type(event.data)}, {event.data}"
+                        )
 
             # アシスタントメッセージを保存
             db.add(
@@ -535,25 +559,25 @@ async def stream_chat(
 
             # タイトル生成処理
             if not conv.title and len(conv.messages) > 0:
-                first_user_msg = next((m for m in conv.messages if m.role == "user"), None)
+                first_user_msg = next(
+                    (m for m in conv.messages if m.role == "user"), None
+                )
                 if first_user_msg:
-                    conv.title = first_user_msg.content[:50] + ("..." if len(first_user_msg.content) > 50 else "")
+                    conv.title = first_user_msg.content[:50] + (
+                        "..." if len(first_user_msg.content) > 50 else ""
+                    )
 
             conv.updated_at = datetime.now(UTC)
             db.commit()
 
             # ストリーミング完了
-            done_event = SSEEvent(
-                type="done",
-                message_id=assistant_id
-            )
+            done_event = SSEEvent(type="done", message_id=assistant_id)
             yield f"data: {done_event.model_dump_json()}\n\n"
 
         except Exception as e:
             # エラー送信
             error_event = SSEEvent(
-                type="error",
-                message=f"エラーが発生しました: {str(e)}"
+                type="error", message=f"エラーが発生しました: {str(e)}"
             )
             yield f"data: {error_event.model_dump_json()}\n\n"
         finally:
@@ -567,7 +591,7 @@ async def stream_chat(
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "Authorization",
-        }
+        },
     )
 
 
