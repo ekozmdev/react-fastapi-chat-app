@@ -10,7 +10,7 @@ This is a React + FastAPI chat application with real-time Server-Sent Events (SS
 - **Backend**: FastAPI (Python 3.13+) 
 - **Database**: PostgreSQL 16
 - **Infrastructure**: Docker Compose with Nginx reverse proxy
-- **LLM**: OpenAI GPT integration
+- **LLM**: OpenAI GPT integration via openai-agents-python SDK
 
 ## Development Commands
 
@@ -72,8 +72,10 @@ compose.yaml            # Docker Compose orchestration
 ### Technology Migration Notes
 - Recently migrated from Poetry to uv for dependency management
 - Recently migrated from WebSocket to Server-Sent Events (SSE) for better HTTP compatibility
-- Uses AsyncOpenAI client for asynchronous API calls
+- Recently migrated from direct OpenAI API calls to openai-agents-python SDK
+- Uses openai-agents SDK with Agent/ModelSettings pattern for LLM interactions
 - SSE provides foundation for future Function Calling/MCP tool status display
+- Agent-based architecture enables future multi-agent and tool integration features
 - All code should be written in Japanese documentation style (see existing files)
 
 ## Environment Setup
