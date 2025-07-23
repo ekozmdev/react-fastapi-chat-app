@@ -17,7 +17,8 @@ load_dotenv()
 def init_database():
     """データベースとテーブルを初期化"""
     database_url = os.getenv(
-        "DATABASE_URL", "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
+        "DATABASE_URL",
+        "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb",
     )
 
     print(f"Connecting to database: {database_url}")
