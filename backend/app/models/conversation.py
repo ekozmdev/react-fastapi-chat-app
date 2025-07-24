@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -33,6 +34,9 @@ class Message(Base):
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    
+    # Phase 1で追加：ツール実行メタデータ
+    tool_metadata = Column(JSON, nullable=True)
 
     # リレーション
     conversation = relationship("Conversation", back_populates="messages")

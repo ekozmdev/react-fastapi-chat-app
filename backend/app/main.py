@@ -1,7 +1,8 @@
 import os
+import time
 import uuid
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Dict, List, Literal
 
 import uvicorn
 from agents import Agent, ModelSettings, Runner
@@ -25,6 +26,7 @@ from .auth import (
 )
 from .database import get_db
 from .models import Conversation, Message, User
+from .tools import AVAILABLE_TOOLS
 
 load_dotenv()
 
@@ -41,15 +43,20 @@ app.add_middleware(
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Agents SDK設定
+# Agents SDK設定（Phase 1でツール機能を追加）
 chat_agent = Agent(
     name="ChatAssistant",
-    instructions="You are a helpful assistant. Please respond in the same language as the user's input.",
+    instructions="""あなたは親切で知識豊富なアシスタントです。
+    ユーザーの質問に正確かつ丁寧に答えてください。
+    必要に応じてツールを使用してください。
+    時刻の取得や計算が必要な場合は、適切なツールを使用してください。
+    回答は常にユーザーの言語で行ってください。""",
     model="gpt-4o",
     model_settings=ModelSettings(
         max_tokens=1024,
         temperature=0.7,
     ),
+    tools=AVAILABLE_TOOLS  # tools.pyで定義されたツールを自動で利用
 )
 
 
@@ -62,6 +69,56 @@ chat_agent = Agent(
 class ChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
+
+
+# Phase 1: ツール実行追跡クラス
+class ToolExecutionTracker:
+    """ツール実行の追跡とメタデータ生成を管理"""
+    
+    def __init__(self):
+        self.tools_used: List[Dict[str, Any]] = []
+        self.current_tool: Dict[str, Any] | None = None
+        
+    def start_tool(self, tool_name: str, arguments: Dict[str, Any]) -> None:
+        """ツール実行開始"""
+        self.current_tool = {
+            "name": tool_name,
+            "input": arguments,
+            "start_time": time.time() * 1000,  # ミリ秒
+            "status": "executing"
+        }
+        
+    def complete_tool(self, output: str = None, error: str = None) -> None:
+        """ツール実行完了"""
+        if self.current_tool:
+            execution_time = int(time.time() * 1000 - self.current_tool["start_time"])
+            self.current_tool.update({
+                "output": output,
+                "error": error,
+                "status": "success" if not error else "error",
+                "execution_time_ms": execution_time
+            })
+            self.tools_used.append(self.current_tool)
+            self.current_tool = None
+            
+    def get_metadata(self) -> Dict[str, Any] | None:
+        """tool_metadataを生成"""
+        if not self.tools_used:
+            return None
+            
+        success_count = sum(1 for t in self.tools_used if t["status"] == "success")
+        error_count = len(self.tools_used) - success_count
+        total_time = sum(t["execution_time_ms"] for t in self.tools_used)
+        
+        return {
+            "tools_used": self.tools_used,
+            "summary": {
+                "total_tools": len(self.tools_used),
+                "total_time_ms": total_time,
+                "success_count": success_count,
+                "error_count": error_count
+            }
+        }
 
 
 class SSEEvent(BaseModel):
@@ -399,12 +456,26 @@ async def stream_chat(
             # ストリーミング開始
             assistant_content = ""
             assistant_id = str(uuid.uuid4())
+            tool_tracker = ToolExecutionTracker()  # Phase 1: ツール追跡開始
 
             # Agents SDK でストリーミング実行
             result = Runner.run_streamed(chat_agent, api_messages)
 
             async for event in result.stream_events():
-                if event.type == "raw_response_event":
+                # Phase 1: ツール実行イベントの処理
+                if hasattr(event, 'item') and hasattr(event.item, 'type'):
+                    if event.item.type == "tool_call_item":
+                        # ツール呼び出し開始
+                        tool_name = getattr(event.item, 'name', 'unknown')
+                        arguments = getattr(event.item, 'arguments', {})
+                        tool_tracker.start_tool(tool_name, arguments)
+                    elif event.item.type == "tool_call_output_item":
+                        # ツール実行完了
+                        output = getattr(event.item, 'output', '')
+                        error = getattr(event.item, 'error', None)
+                        tool_tracker.complete_tool(output=output, error=error)
+                
+                elif event.type == "raw_response_event":
                     # delta の存在と内容を慎重にチェック
                     if (
                         hasattr(event, "data")
@@ -426,13 +497,15 @@ async def stream_chat(
                             f"Unexpected event.data format: {type(event.data)}, {event.data}"
                         )
 
-            # アシスタントメッセージを保存
+            # Phase 1: ツールメタデータを含めてアシスタントメッセージを保存
+            tool_metadata = tool_tracker.get_metadata()
             db.add(
                 Message(
                     id=assistant_id,
                     conversation_id=conv.id,
                     role="assistant",
                     content=assistant_content,
+                    tool_metadata=tool_metadata,
                 )
             )
 

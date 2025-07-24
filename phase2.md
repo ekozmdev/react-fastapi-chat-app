@@ -22,6 +22,64 @@ Phase 1で構築したツール機能とデータ保存基盤を活用し、ツ�
 - 既存の `tool_metadata` を保持・活用
 - 段階的なデータ拡張により完全な下位互換性を確保
 
+## Phase 1実装から得た重要な学び
+
+### マイグレーション関連の教訓
+1. **Alembicの--autogenerateの落とし穴**
+   - モデル変更後にマイグレーション作成でも、空のupgrade()/downgrade()が生成される場合がある
+   - **対策**: マイグレーションファイル作成後は必ず内容を確認し、手動調整を行う
+
+2. **PostgreSQL JSONカラムのインデックス制約**
+   - `postgresql.JSON`型に単純なGINインデックスを作成するとエラーが発生
+   - **対策**: Phase 2のToolExecutionテーブルでは適切なインデックス戦略を採用
+
+3. **マイグレーション確認手順**
+   ```bash
+   # Phase 2実装時の推奨手順
+   uv run alembic revision --autogenerate -m "Add ToolExecution table"
+   # ↓ 生成されたファイルの内容確認（重要！）
+   # ↓ 必要に応じて手動調整
+   uv run alembic upgrade head
+   ```
+
+### openai-agents SDKイベント処理の知見
+1. **大量の予期しないイベント**
+   - `Runner.run_streamed()`で多数の`Unexpected event`ログが発生
+   - **対策**: ログレベルの調整とイベントフィルタリングの改善
+
+2. **ツール実行イベントの正確な検出**
+   ```python
+   # Phase 1で成功したパターン
+   if hasattr(event, 'item') and hasattr(event.item, 'type'):
+       if event.item.type == "tool_call_item":
+           # ツール呼び出し開始
+       elif event.item.type == "tool_call_output_item":
+           # ツール実行完了
+   ```
+
+3. **引数なしツールの特殊処理**
+   - `get_current_time()`のような引数なしツールは`arguments='{}'`が送信される
+   - Phase 2のUI設計では適切にフィルタリングが必要
+
+### ツール実行追跡アーキテクチャの成功パターン
+1. **ToolExecutionTrackerクラスの有効性**
+   - Phase 1で実装したトラッカーパターンは有効
+   - Phase 2では専用テーブルとの組み合わせで更なる拡張
+
+2. **JSONメタデータ構造の適切性**
+   ```python
+   # Phase 1で成功した構造（Phase 2でも活用）
+   {
+       "tools_used": [...],
+       "summary": {
+           "total_tools": 1,
+           "total_time_ms": 45,
+           "success_count": 1,
+           "error_count": 0
+       }
+   }
+   ```
+
 ## データベース設計（Phase 1との互換性重視）
 
 ### Phase 1から継承するMessageテーブル
@@ -770,9 +828,59 @@ async def get_conversation_with_tools(
 ## 実装手順（Phase 1基盤活用版）
 
 ### Step 1: Phase 1データの保護とマイグレーション準備
-1. Phase 1環境のバックアップ作成
-2. `tool_metadata` データの整合性確認
-3. Phase 2マイグレーション計画の最終確認
+
+#### 1.1 Phase 1環境のバックアップ作成
+```bash
+# データベースバックアップ
+pg_dump postgresql://chatuser:chatpassword@localhost:5432/chatdb > phase1_backup.sql
+
+# 既存tool_metadataの確認
+uv run python -c "
+from app.database import SessionLocal
+from app.models import Message
+db = SessionLocal()
+tool_messages = db.query(Message).filter(Message.tool_metadata.isnot(None)).count()
+print(f'Tool metadata records: {tool_messages}')
+db.close()
+"
+```
+
+#### 1.2 マイグレーション作成のベストプラクティス（Phase 1の教訓を活用）
+```bash
+# Step 1: モデル変更の完了確認
+python -c "from app.models import Base; print([t.name for t in Base.metadata.tables.values()])"
+
+# Step 2: マイグレーション作成
+uv run alembic revision --autogenerate -m "Add ToolExecution table and detailed tracking"
+
+# Step 3: 生成されたマイグレーションファイルの確認（重要！）
+# - upgrade()とdowngrade()が適切に生成されているか
+# - PostgreSQL固有の制約（JSONインデックスなど）に問題がないか
+# - 外部キー制約が正しく設定されているか
+
+# Step 4: テスト環境での事前確認
+uv run alembic upgrade head --sql  # SQL出力で事前確認
+```
+
+#### 1.3 Phase 1の実装品質チェック
+```bash
+# ツール機能の動作確認
+curl -X POST http://localhost:8000/api/chat/stream/{conversation_id} \
+  -H "Authorization: Bearer {token}" \
+  -d '{"message": "今の時刻は？"}'
+
+# tool_metadata保存確認
+uv run python -c "
+from app.database import SessionLocal
+from app.models import Message
+import json
+db = SessionLocal()
+latest_msg = db.query(Message).filter(Message.tool_metadata.isnot(None)).order_by(Message.created_at.desc()).first()
+if latest_msg:
+    print('Latest tool_metadata:', json.dumps(latest_msg.tool_metadata, indent=2))
+db.close()
+"
+```
 
 ### Step 2: データベース拡張（段階的）
 1. `ToolExecution` テーブルの作成
@@ -782,11 +890,135 @@ async def get_conversation_with_tools(
 5. データ整合性の検証
 
 ### Step 3: バックエンド実装（拡張版）
-1. Phase 1の `ToolExecutionTracker` を `ToolExecutionManager` に拡張
-2. SSEイベントの詳細化
-3. ストリーミング処理の段階的イベント送信対応
-4. 履歴取得APIの拡張
-5. Phase 1互換性の確保
+
+#### 3.1 ToolExecutionManager の改良実装（Phase 1の教訓を反映）
+```python
+# app/tool_execution_manager.py (Phase 1のToolExecutionTrackerを拡張)
+import logging
+from typing import Dict, Any, Optional
+from sqlalchemy.orm import Session
+
+# Phase 1で学んだ：適切なログ設定
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Unexpected eventログの制御
+
+class ToolExecutionManager:
+    """Phase 2: データベース連携型ツール実行管理"""
+    
+    def __init__(self, db: Session, message_id: str):
+        self.db = db
+        self.message_id = message_id
+        self.tools_used = []  # Phase 1互換性のため保持
+        self.current_tool = None
+        
+    def start_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
+        """ツール実行開始（Phase 1の成功パターンを踏襲）"""
+        try:
+            # Phase 1で学んだ：安全なattribute取得
+            safe_arguments = arguments if isinstance(arguments, dict) else {}
+            
+            # Phase 2: データベースに詳細記録
+            tool_execution = ToolExecution(
+                message_id=self.message_id,
+                tool_name=tool_name,
+                arguments=safe_arguments,
+                status='started',
+                started_at=datetime.now(UTC),
+                execution_order=len(self.tools_used) + 1
+            )
+            self.db.add(tool_execution)
+            self.db.commit()
+            
+            # Phase 1互換性の維持
+            self.current_tool = {
+                "name": tool_name,
+                "input": safe_arguments,
+                "start_time": time.time() * 1000,
+                "status": "executing",
+                "execution_id": tool_execution.id
+            }
+            
+            return tool_execution.id
+            
+        except Exception as e:
+            logger.error(f"Tool start failed: {e}")
+            # Phase 1で学んだ：エラー時のフォールバック
+            return None
+```
+
+#### 3.2 改善されたイベント処理（Phase 1の問題を解決）
+```python
+# main.py でのストリーミング処理（Phase 1の改善版）
+async for event in result.stream_events():
+    try:
+        # Phase 1で学んだ：hasattr()による安全なチェック
+        if hasattr(event, 'item') and hasattr(event.item, 'type'):
+            if event.item.type == "tool_call_item":
+                tool_name = getattr(event.item, 'name', 'unknown')
+                arguments = getattr(event.item, 'arguments', {})
+                
+                # Phase 2: 詳細な状態管理
+                execution_id = tool_manager.start_tool(tool_name, arguments)
+                
+                # Phase 2: フロントエンドにツール開始イベント送信
+                tool_start_event = SSEEvent(
+                    type="tool_start",
+                    tool_name=tool_name,
+                    execution_id=execution_id,
+                    message_id=assistant_id
+                )
+                yield f"data: {tool_start_event.model_dump_json()}\n\n"
+                
+            elif event.item.type == "tool_call_output_item":
+                output = getattr(event.item, 'output', '')
+                error = getattr(event.item, 'error', None)
+                tool_manager.complete_tool(output=output, error=error)
+                
+        elif event.type == "raw_response_event":
+            # Phase 1で成功したパターンを保持
+            if (hasattr(event, "data") and hasattr(event.data, "delta") 
+                and event.data.delta is not None and isinstance(event.data.delta, str)):
+                
+                content = str(event.data.delta)
+                # Phase 1で発見した問題：{}の表示制御
+                if content.strip() not in ['{}', '']:  # 空引数の除外
+                    assistant_content += content
+                    
+                    content_event = SSEEvent(
+                        type="content", 
+                        content=content, 
+                        message_id=assistant_id
+                    )
+                    yield f"data: {content_event.model_dump_json()}\n\n"
+            else:
+                # Phase 1で学んだ：ログレベルの適切な制御
+                logger.debug(f"Unexpected event: {type(event.data)}")
+                
+    except Exception as e:
+        # Phase 1で不足していた：包括的エラーハンドリング
+        logger.error(f"Event processing error: {e}")
+        continue  # ストリーミングを継続
+```
+
+#### 3.3 SSEイベントの拡張（Phase 1基盤を保持）
+```python
+# Phase 1のSSEEventを拡張（互換性保持）
+class SSEEvent(BaseModel):
+    type: Literal["status", "content", "done", "error", "tool_start", "tool_progress", "tool_complete"]
+    message: str | None = None
+    content: str | None = None
+    message_id: str | None = None
+    
+    # Phase 1から継承
+    tool_name: str | None = None
+    step: str | None = None
+    
+    # Phase 2で追加
+    execution_id: str | None = None
+    tool_status: str | None = None
+    progress: int | None = None  # 0-100
+    tool_output: str | None = None
+```
 
 ### Step 4: フロントエンド実装（段階的）
 1. TypeScript型定義の拡張（Phase 1基盤を保持）
@@ -801,6 +1033,81 @@ async def get_conversation_with_tools(
 3. データ移行の検証
 4. パフォーマンス影響の確認
 5. 本番環境での段階的展開
+
+## Phase 1実装の教訓まとめ（Phase 2で活用）
+
+### 🔥 **確実に実行すべき検証項目**
+1. **マイグレーションファイルの内容確認**
+   ```bash
+   # 必ず実行：生成されたマイグレーションの確認
+   cat alembic/versions/最新のファイル.py
+   # 空のupgrade()/downgrade()でないことを確認
+   ```
+
+2. **モデル変更の反映確認**
+   ```python
+   # Phase 2実装前に必ず実行
+   from app.models import Base
+   print("Tables:", [t.name for t in Base.metadata.tables.values()])
+   print("ToolExecution columns:", [c.name for c in Base.metadata.tables['tool_executions'].columns])
+   ```
+
+3. **openai-agents SDKイベントの事前テスト**
+   ```python
+   # ツール実行時のイベントタイプ確認
+   async for event in result.stream_events():
+       print(f"Event type: {event.type}, Has item: {hasattr(event, 'item')}")
+       if hasattr(event, 'item'):
+           print(f"Item type: {getattr(event.item, 'type', 'N/A')}")
+   ```
+
+### ⚠️ **Phase 1で発生した問題と対策**
+1. **{}表示問題**: 引数なしツールの空引数表示
+   - **対策**: `content.strip() not in ['{}', '']` でフィルタリング
+
+2. **大量の Unexpected event ログ**
+   - **対策**: `logger.setLevel(logging.INFO)` + debug レベルでの出力
+
+3. **PostgreSQL JSON インデックスエラー**
+   - **対策**: GIN インデックス作成時の適切なオペレータークラス指定
+
+### 🚀 **Phase 2で改善すべき品質ポイント**
+1. **エラーハンドリングの強化**
+   ```python
+   # Phase 1で不足していた包括的なエラー処理
+   try:
+       # ツール実行処理
+   except Exception as e:
+       logger.error(f"Tool execution error: {e}")
+       # フォールバック処理
+   ```
+
+2. **型安全性の向上**
+   ```python
+   # Phase 2では必須：適切な型ヒント
+   def start_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
+   ```
+
+3. **ログ品質の改善**
+   ```python
+   # Phase 1の問題：print文使用
+   print(f"Unexpected event: {event}")
+   
+   # Phase 2で改善：構造化ログ
+   logger.info("tool_execution_started", extra={
+       "tool_name": tool_name,
+       "execution_id": execution_id,
+       "message_id": message_id
+   })
+   ```
+
+### 📊 **成功パターンの再利用**
+1. **ToolExecutionTracker のクラス設計**: 単一責任で拡張しやすい
+2. **AVAILABLE_TOOLS リスト**: 新ツール追加が容易
+3. **tool_metadata の JSON 構造**: Phase 2 でも活用可能
+4. **hasattr() による安全なイベント処理**: 堅牢性が高い
+
+**Phase 1 → Phase 2 移行の成功の鍵**: 上記の教訓を活かし、確実で品質の高い実装を行う
 
 ## 期待される動作
 
