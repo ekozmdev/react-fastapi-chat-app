@@ -47,8 +47,16 @@ docker-compose ps       # Check service status
   
 /backend/               # FastAPI application
   /app/                 # Application code
-    main.py             # FastAPI app with all routes and models
+    /models/            # SQLAlchemy database models
+      __init__.py       # Model imports for app-wide access
+      base.py           # SQLAlchemy Base declaration
+      user.py           # User model
+      conversation.py   # Conversation and Message models
+    auth.py             # JWT authentication and password handling
+    database.py         # Database connection and session management
+    main.py             # FastAPI app with routes and business logic
   /alembic/             # Database migrations
+  /scripts/             # Management scripts (user management, etc.)
   pyproject.toml        # uv dependencies and ruff configuration
   
 /nginx/                 # Nginx reverse proxy configuration
@@ -97,6 +105,7 @@ compose.yaml            # Docker Compose orchestration
 - SQLAlchemy 2.0 async patterns
 - FastAPI dependency injection for database sessions
 - Pydantic models for validation
+- File-type project structure: models/, auth.py, database.py separation
 
 ### TypeScript (Frontend)
 - Strict TypeScript configuration

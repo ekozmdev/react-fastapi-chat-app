@@ -54,10 +54,20 @@ class Message(Base):
 ```
 
 #### マイグレーション（Phase 1）
-```sql
--- 2025_01_23_add_tool_metadata.sql
-ALTER TABLE messages ADD COLUMN tool_metadata JSON;
-CREATE INDEX idx_messages_tool_metadata ON messages USING GIN (tool_metadata) WHERE tool_metadata IS NOT NULL;
+```python
+# alembic/versions/xxx_add_tool_metadata.py
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSON
+
+def upgrade():
+    op.add_column('messages', sa.Column('tool_metadata', JSON, nullable=True))
+    op.create_index('idx_messages_tool_metadata', 'messages', ['tool_metadata'], 
+                   postgresql_using='gin', postgresql_where=sa.text('tool_metadata IS NOT NULL'))
+
+def downgrade():
+    op.drop_index('idx_messages_tool_metadata', table_name='messages')
+    op.drop_column('messages', 'tool_metadata')
 ```
 
 ### SSEイベントの軽微な拡張（Phase 1）
@@ -82,7 +92,12 @@ class SSEEvent(BaseModel):
 
 #### 1.1 基本ツールの定義
 ```python
-# app/tools.py (新規作成)
+# app/tools/__init__.py (新規作成)
+from .basic_tools import get_current_time, calculate
+
+__all__ = ["get_current_time", "calculate"]
+
+# app/tools/basic_tools.py (新規作成)
 from agents import function_tool
 from datetime import UTC, datetime
 import ast
@@ -126,7 +141,7 @@ AVAILABLE_TOOLS = [get_current_time, calculate]
 # app/main.py での変更点
 
 # インポート追加
-from .tools import AVAILABLE_TOOLS
+from .tools import get_current_time, calculate
 
 # エージェント設定の更新
 chat_agent = Agent(
@@ -141,7 +156,7 @@ chat_agent = Agent(
         max_tokens=1024,
         temperature=0.7,
     ),
-    tools=AVAILABLE_TOOLS  # ツールを追加
+    tools=[get_current_time, calculate]  # ツールを追加
 )
 ```
 
@@ -380,9 +395,10 @@ const MessageDisplay: React.FC<{message: Message}> = ({message}) => {
 3. インデックス作成
 
 ### Step 2: ツールモジュール作成
-1. `app/tools.py` ファイル作成
-2. 基本ツール（時刻取得、計算）実装
-3. ツールリストの定義
+1. `app/tools/` ディレクトリ作成
+2. `app/tools/__init__.py` と `app/tools/basic_tools.py` ファイル作成
+3. 基本ツール（時刻取得、計算）実装
+4. 適切なモジュール構造での公開
 
 ### Step 3: バックエンド実装
 1. `ToolExecutionTracker` クラス実装
