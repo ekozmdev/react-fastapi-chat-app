@@ -90,14 +90,9 @@ class SSEEvent(BaseModel):
 
 ### 1. ツール関数の実装
 
-#### 1.1 基本ツールの定義
+#### 1.1 拡張しやすいツール定義
 ```python
-# app/tools/__init__.py (新規作成)
-from .basic_tools import get_current_time, calculate
-
-__all__ = ["get_current_time", "calculate"]
-
-# app/tools/basic_tools.py (新規作成)
+# app/tools.py (新規作成)
 from agents import function_tool
 from datetime import UTC, datetime
 import ast
@@ -130,8 +125,30 @@ def calculate(expression: str) -> str:
     except Exception as e:
         return f"計算エラー: {str(e)}"
 
-# 利用可能なツールリスト
-AVAILABLE_TOOLS = [get_current_time, calculate]
+# ==========================================
+# ツール拡張ガイド
+# ==========================================
+# 新しいツールを追加する場合:
+# 1. @function_tool デコレータを使って関数を定義
+# 2. 下記のAVAILABLE_TOOLSリストに関数を追加
+# 3. main.pyでの変更は不要（自動で反映されます）
+# ==========================================
+
+# 利用可能なツールリスト（新しいツールはここに追加）
+AVAILABLE_TOOLS = [
+    get_current_time,  # 現在時刻を取得
+    calculate,         # 数式計算
+    # 新しいツールはここに追加してください
+    # 例: weather_tool, search_tool, etc.
+]
+
+# ツール追加例（コメントアウト）
+# @function_tool
+# def example_tool(param: str) -> str:
+#     """新しいツールの例"""
+#     return f"処理結果: {param}"
+# 
+# 上記を定義したら AVAILABLE_TOOLS に example_tool を追加
 ```
 
 ### 2. エージェント設定の更新
@@ -141,7 +158,7 @@ AVAILABLE_TOOLS = [get_current_time, calculate]
 # app/main.py での変更点
 
 # インポート追加
-from .tools import get_current_time, calculate
+from .tools import AVAILABLE_TOOLS
 
 # エージェント設定の更新
 chat_agent = Agent(
@@ -156,7 +173,7 @@ chat_agent = Agent(
         max_tokens=1024,
         temperature=0.7,
     ),
-    tools=[get_current_time, calculate]  # ツールを追加
+    tools=AVAILABLE_TOOLS  # tools.pyで定義されたツールを自動で利用
 )
 ```
 
@@ -395,10 +412,10 @@ const MessageDisplay: React.FC<{message: Message}> = ({message}) => {
 3. インデックス作成
 
 ### Step 2: ツールモジュール作成
-1. `app/tools/` ディレクトリ作成
-2. `app/tools/__init__.py` と `app/tools/basic_tools.py` ファイル作成
-3. 基本ツール（時刻取得、計算）実装
-4. 適切なモジュール構造での公開
+1. `app/tools.py` ファイル作成
+2. 基本ツール（時刻取得、計算）実装
+3. `AVAILABLE_TOOLS` リストでツールを管理
+4. 拡張ガイドコメントの追加
 
 ### Step 3: バックエンド実装
 1. `ToolExecutionTracker` クラス実装
@@ -494,11 +511,45 @@ def migrate_phase1_to_phase2(message: Message):
 - データベース変更は軽微（カラム追加のみ）
 - Phase 2への移行パスが明確
 
+## ツール拡張ガイド
+
+### 新しいツールの追加方法
+
+1. **app/tools.py** に新しい関数を定義
+2. `@function_tool` デコレータを使用
+3. `AVAILABLE_TOOLS` リストに関数を追加
+4. アプリ再起動（main.pyの変更は不要）
+
+### ツール開発のベストプラクティス
+
+#### ツール関数の命名規則
+- 動詞ベース: `get_weather`, `calculate_tax`, `search_web`
+- 明確で簡潔: 何をするかが名前で分かる
+
+#### エラーハンドリング
+```python
+@function_tool
+def example_tool(param: str) -> str:
+    """ツールの説明"""
+    try:
+        # メイン処理
+        result = process_data(param)
+        return f"成功: {result}"
+    except Exception as e:
+        return f"エラー: {str(e)}"
+```
+
+#### パラメータ型の明示
+- 型ヒントを必ず使用
+- docstringでパラメータを説明
+- 適切なデフォルト値の設定
+
 ### 注意点
 1. **データベースマイグレーション**: 本番環境での実行計画
 2. **計算の安全性**: `eval()`の制限実装
 3. **JSONカラムのサイズ**: 大量ツール実行時の考慮
 4. **Phase 2移行時のデータ整合性確保**
+5. **ツール追加時のテスト**: 各ツールの動作確認を徹底
 
 ## 成功の指標
 
