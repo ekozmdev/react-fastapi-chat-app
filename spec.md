@@ -1,419 +1,520 @@
-# OpenAI パッケージ切り替え仕様書
+# Tool Use機能追加仕様書
 
 ## 概要
-バックエンドの OpenAI 呼び出し部分を直接の `AsyncOpenAI` クライアントから `openai-agents-python` SDK に切り替える。**既存機能は完全に維持し、新機能は追加しない**。
+バックエンドのAIエージェントにtool_use機能を追加し、外部ツールの実行とリアルタイム状況表示を可能にする。
 
-## 目的
-- 将来的なエージェント機能拡張の基盤準備
-- 既存のSSEストリーミング動作を完全に維持
-- フロントエンドへの影響なし
+## 現在の実装状況
 
-## 現在の実装分析
+### AIエージェント
+- openai-agents-python SDKを使用
+- `Agent` + `Runner.run_streamed()` でストリーミング応答
+- SSE (Server-Sent Events) でリアルタイム通信
+- モデル: gpt-4o
 
-### OpenAI呼び出し箇所（`backend/app/main.py`）
-- **Line 13**: `from openai import AsyncOpenAI`
-- **Line 48**: `client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))`
-- **Line 505-511**: ストリーミング作成部分
-- **Line 513-524**: ストリーミング処理とSSE送信
-
-### 現在のコード（main.py:505-524）
-
+### SSEイベント構造
 ```python
-# OpenAI ストリーミング開始
-stream = await client.chat.completions.create(
-    model="gpt-4.1",
-    messages=api_messages,
-    max_tokens=1024,
-    temperature=0.7,
-    stream=True,
-)
-
-async for chunk in stream:
-    if chunk.choices[0].delta.content:
-        content = chunk.choices[0].delta.content
-        assistant_content += content
-
-        # コンテンツストリーミング
-        content_event = SSEEvent(
-            type="content",
-            content=content,
-            message_id=assistant_id
-        )
-        yield f"data: {content_event.model_dump_json()}\n\n"
+class SSEEvent(BaseModel):
+    type: Literal["status", "content", "done", "error", "tool_start", "tool_end"]
+    message: str | None = None
+    content: str | None = None
+    message_id: str | None = None
+    tool_name: str | None = None
+    tool_id: str | None = None
+    tool_output: str | None = None
+    step: str | None = None
 ```
 
-## 切り替え仕様
+## 変更内容
 
-### 1. 依存関係の追加
-```bash
-cd backend
-uv add openai-agents
-```
+### 1. ツール定義の追加
 
-### 2. 最小限のコード変更
+#### 1.1 基本ツール実装（@function_toolデコレータ使用）
+openai-agents-python SDK v0.2.3の`@function_tool`デコレータを使用してツールを実装する：
 
-#### A. インポートの追加
 ```python
-# 既存のインポートを維持
-from openai import AsyncOpenAI
+from agents import function_tool
+from pydantic import BaseModel
 
-# 新しく追加
-from agents import Agent, Runner
-```
+@function_tool
+def get_current_time() -> str:
+    """現在の時刻を取得します。"""
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-#### B. エージェント定義（アプリケーション初期化時）
-```python
-# グローバル変数として定義
-chat_agent = Agent(
-    name="ChatAssistant",
-    instructions="You are a helpful assistant. Please respond in the same language as the user's input.",
-    model="gpt-4o",
-    # 既存パラメータを維持
-    max_tokens=1024,
-    temperature=0.7,
-)
-```
+@function_tool  
+def calculate(expression: str) -> str:
+    """数式を計算します。安全な数式のみサポートします。
+    
+    Args:
+        expression: 計算する数式（例: "2 + 3 * 4"）
+    
+    Returns:
+        計算結果
+    """
+    try:
+        # 安全な計算のため、許可された文字のみチェック
+        allowed_chars = set('0123456789+-*/.() ')
+        if all(c in allowed_chars for c in expression):
+            result = eval(expression)  # 本番では数式評価ライブラリを使用
+            return str(result)
+        else:
+            return "エラー: 許可されていない文字が含まれています"
+    except Exception as e:
+        return f"エラー: {str(e)}"
 
-#### C. ストリーミング部分のみ置き換え
-```python
-# 置き換え前（main.py:505-524）
-stream = await client.chat.completions.create(
-    model="gpt-4.1",
-    messages=api_messages,
-    max_tokens=1024,
-    temperature=0.7,
-    stream=True,
-)
+class SearchQuery(BaseModel):
+    query: str
+    max_results: int = 5
 
-async for chunk in stream:
-    if chunk.choices[0].delta.content:
-        content = chunk.choices[0].delta.content
-        assistant_content += content
+@function_tool
+def web_search(search_query: SearchQuery) -> str:
+    """Web検索を実行します。
+    
+    Args:
+        search_query: 検索クエリと最大結果数
         
-        content_event = SSEEvent(
-            type="content",
-            content=content,
-            message_id=assistant_id
-        )
-        yield f"data: {content_event.model_dump_json()}\n\n"
-
-# 置き換え後
-result = Runner.run_streamed(chat_agent, api_messages)
-
-async for event in result.stream_events():
-    if event.type == "raw_response_event":
-        if hasattr(event.data, 'delta') and event.data.delta:
-            content = event.data.delta
-            assistant_content += content
-            
-            content_event = SSEEvent(
-                type="content",
-                content=content,
-                message_id=assistant_id
-            )
-            yield f"data: {content_event.model_dump_json()}\n\n"
+    Returns:
+        検索結果
+    """
+    # TODO: 実際の検索API実装（DuckDuckGo API等）
+    return f"検索結果: {search_query.query}に関する{search_query.max_results}件の情報"
 ```
 
-## 動作保証
-
-### 維持する機能
-1. **SSEストリーミング**: 既存のフロントエンドとの完全互換性
-2. **レスポンス形式**: `SSEEvent` 構造の維持
-3. **エラーハンドリング**: 既存のtry-catch構造維持
-4. **データベース操作**: メッセージ保存ロジックの維持
-5. **認証**: JWT認証フローの維持
-
-### 変更しない部分
-- FastAPI エンドポイント構造
-- データベーススキーマ
-- フロントエンドとの通信プロトコル
-- エラーレスポンス形式
-- 認証・認可ロジック
-
-## 実装手順
-
-### Phase 1: 環境準備
-```bash
-cd backend
-uv add openai-agents
-```
-
-### Phase 2: コード変更
-1. インポート追加
-2. エージェント定義追加
-3. ストリーミング部分のみ置き換え
-
-### Phase 3: 動作確認
-1. 既存テストの実行
-2. SSEエンドポイントの動作確認
-3. フロントエンドとの統合テスト
-
-## リスク対策
-
-### 低リスク要因
-- 最小限の変更範囲
-- 既存インターフェース維持
-- 段階的な実装
-
-### 対策
-- 既存の`AsyncOpenAI`クライアント保持（フォールバック用）
-- 詳細なテストによる動作確認
-- リリース前の十分な検証期間
-
-## 成功基準
-
-1. **機能維持**: 既存のすべての機能が同じように動作する
-2. **パフォーマンス**: レスポンス時間の大幅な劣化がない
-3. **安定性**: エラー率の増加がない
-4. **互換性**: フロントエンドの変更が不要
-
-この仕様により、将来のエージェント機能拡張の基盤を準備しつつ、現在の安定した動作を維持する。
-
-## セルフレビュー：データベース保存・フロントエンドへの影響分析
-
-### ✅ 影響なし（確認済み）
-
-#### 1. データベース保存ロジック
-**現在の保存フロー**:
+#### 1.2 ツールリストの定義
 ```python
-# Line 478-485: ユーザーメッセージ即座に保存
-user_msg = Message(...)
-db.add(user_msg)
-db.commit()
-
-# Line 488-497: 履歴をOpenAI API形式で取得
-api_messages = [{"role": m.role, "content": m.content} for m in conv.messages]
-
-# Line 513-524: ストリーミング中に蓄積
-assistant_content += content
-
-# Line 526-534: 蓄積したコンテンツを保存
-db.add(Message(..., content=assistant_content))
+# 利用可能なツールのリスト
+AVAILABLE_TOOLS = [get_current_time, calculate, web_search]
 ```
 
-**移行後も同じフロー**:
-- ✅ `Runner.run_streamed(agent, api_messages)` - OpenAI API形式を直接受け取り可能
-- ✅ `assistant_content += event.data.delta` - 同じ蓄積方法
-- ✅ `async for event in result.stream_events()` - 完了時に自動停止
-- ✅ データベース保存タイミング・方法は完全に同じ
-
-#### 2. フロントエンドとの互換性
-**SSEイベント形式は完全維持**:
-```python
-# 現在も移行後も同じ形式
-content_event = SSEEvent(
-    type="content",
-    content=content,  # chunk.choices[0].delta.content → event.data.delta
-    message_id=assistant_id
-)
-yield f"data: {content_event.model_dump_json()}\n\n"
-```
-
-- ✅ SSE形式: `data: {...}\n\n` 維持
-- ✅ イベント構造: `SSEEvent` クラス維持  
-- ✅ イベント種類: `content`, `done`, `error` 維持
-- ✅ ストリーミング順序: トークン単位での送信維持
-
-### ⚠️ 検証が必要な項目
-
-#### 1. ストリーミング内容の一致性
-```python
-# 現在: OpenAI API
-chunk.choices[0].delta.content  # → "Hello"
-
-# 移行後: Agents SDK  
-event.data.delta  # → "Hello" (同じ内容か要確認)
-```
-
-#### 2. エラーハンドリングの互換性
-```python
-# 現在のエラーキャッチ
-try:
-    stream = await client.chat.completions.create(...)
-except Exception as e:
-    error_event = SSEEvent(type="error", message=f"エラーが発生しました: {str(e)}")
-
-# 移行後も同じ構造でキャッチできるか要確認
-```
-
-#### 3. パフォーマンス・タイミング
-- ストリーミング開始までの遅延時間
-- トークン送信間隔
-- 全体的なレスポンス時間
-
-### 🔧 修正版：置き換えコード
+### 2. Agentの設定変更
 
 ```python
-# より安全な移行コード
-try:
-    # Agents SDK でストリーミング実行
-    result = Runner.run_streamed(chat_agent, api_messages)
-    
-    async for event in result.stream_events():
-        if event.type == "raw_response_event":
-            # delta の存在と内容を慎重にチェック
-            if (hasattr(event.data, 'delta') and 
-                event.data.delta and 
-                isinstance(event.data.delta, str)):
-                
-                content = event.data.delta
-                assistant_content += content
-                
-                content_event = SSEEvent(
-                    type="content",
-                    content=content,
-                    message_id=assistant_id
-                )
-                yield f"data: {content_event.model_dump_json()}\n\n"
-    
-    # ストリーミング完了は自動検知（追加処理不要）
-    
-except Exception as e:
-    # Agents SDK のエラーも同じ方法でキャッチ・送信
-    error_event = SSEEvent(
-        type="error", 
-        message=f"エラーが発生しました: {str(e)}"
-    )
-    yield f"data: {error_event.model_dump_json()}\n\n"
-```
-
-### 📋 移行時のテスト項目
-
-#### 必須テスト
-1. **データ整合性**: 保存されるメッセージ内容が現在と同一
-2. **SSE形式**: フロントエンドが正常に受信・表示
-3. **エラー処理**: 各種エラーケースでの動作確認
-4. **会話履歴**: 複数ターンの会話が正常に継続
-
-#### パフォーマンステスト  
-1. **レスポンス時間**: 初回応答までの時間測定
-2. **ストリーミング速度**: トークン/秒の測定
-3. **メモリ使用量**: 長い会話での検証
-
-### 結論
-データベース保存・フロントエンド互換性については **影響なし** と判断。ただし、実装時は慎重なテストとエラーハンドリングの検証が必要。
-
-## 実装可能性セルフレビュー
-
-### ✅ **技術的実装可能性 - 確認済み**
-
-**1. Agent設定の正確な方法**
-```python
-from agents import Agent, ModelSettings
-
+# Tools対応Agent設定
 chat_agent = Agent(
     name="ChatAssistant",
-    instructions="You are a helpful assistant. Please respond in the same language as the user's input.",
+    instructions="""あなたは親切で知識豊富なアシスタントです。
+    ユーザーの質問に正確かつ丁寧に答えてください。
+    必要に応じてツールを使用してください。
+    回答は常にユーザーの言語で行ってください。""",
     model="gpt-4o",
     model_settings=ModelSettings(
         max_tokens=1024,
         temperature=0.7,
-    )
+    ),
+    tools=AVAILABLE_TOOLS  # @function_toolで定義されたツールリスト
 )
 ```
 
-**2. 入力形式の互換性**
-- ✅ `Runner.run_streamed(agent, api_messages)` でOpenAI API形式を直接受け取り可能
-- ✅ `result.stream_events()` でトークン単位のストリーミング可能
-- ✅ ストリーミング完了は自動検知
+### 3. ストリーミング処理の拡張
 
-### ⚠️ **実装上の重要な課題**
-
-#### 1. システムプロンプトの処理方法変更
+#### 3.1 正確なイベント処理（SDK v0.2.3準拠）
 ```python
-# 現在: api_messagesに含める
-api_messages.insert(0, {"role": "system", "content": "..."})
+from openai.types.responses import ResponseTextDeltaEvent
 
-# 移行後: Agentのinstructionsで設定
-# → システムプロンプトの扱い方が変わることで応答が微妙に変わる可能性
-```
-
-#### 2. モデル名の強制変更
-```python
-# 現在: "gpt-4.1" 
-# 移行後: "gpt-4o" (Agents SDKで対応するモデル名)
-# → モデル特性の変化によるユーザー体験への影響
-```
-
-#### 3. ストリーミングデータ形式の不確実性
-```python
-# 現在: chunk.choices[0].delta.content (必ず文字列)
-# 移行後: event.data.delta (形式・型が要確認)
-```
-
-#### 4. spec.mdの修正版コード
-```python
-# より現実的な移行コード
-try:
-    result = Runner.run_streamed(chat_agent, api_messages)
-    
-    async for event in result.stream_events():
-        if event.type == "raw_response_event":
-            # 型安全性を重視した確認
-            if (hasattr(event, 'data') and 
-                hasattr(event.data, 'delta') and 
-                event.data.delta is not None and
-                isinstance(event.data.delta, str)):
-                
-                content = str(event.data.delta)  # 明示的な型変換
+async for event in result.stream_events():
+    if event.type == "raw_response_event":
+        # 正確な型チェックでテキストストリーミング
+        if isinstance(event.data, ResponseTextDeltaEvent):
+            content = event.data.delta
+            if content:
                 assistant_content += content
-                
+                # コンテンツストリーミング
                 content_event = SSEEvent(
-                    type="content",
-                    content=content,
+                    type="content", 
+                    content=content, 
                     message_id=assistant_id
                 )
                 yield f"data: {content_event.model_dump_json()}\n\n"
-            else:
-                # デバッグ用: 予期しない形式をログ出力
-                print(f"Unexpected event.data format: {type(event.data)}, {event.data}")
-
-except Exception as e:
-    # Agents SDK特有のエラーも同じ方法でハンドリング
-    error_event = SSEEvent(
-        type="error", 
-        message=f"エラーが発生しました: {str(e)}"
-    )
-    yield f"data: {error_event.model_dump_json()}\n\n"
+    
+    elif event.type == "run_item_stream_event":
+        if event.item.type == "tool_call_item":
+            # ツール呼び出し開始
+            tool_name = event.item.raw_item.name
+            tool_id = event.item.id
+            
+            tool_start_event = SSEEvent(
+                type="tool_start",
+                message=f"ツール実行中: {tool_name}",
+                tool_name=tool_name,
+                tool_id=tool_id
+            )
+            yield f"data: {tool_start_event.model_dump_json()}\n\n"
+            
+        elif event.item.type == "tool_call_output_item":
+            # ツール実行完了
+            tool_output = event.item.output
+            
+            tool_end_event = SSEEvent(
+                type="tool_end",
+                message="ツール実行完了",
+                tool_output=tool_output,
+                tool_id=event.item.tool_call_id
+            )
+            yield f"data: {tool_end_event.model_dump_json()}\n\n"
+    
+    elif event.type == "agent_updated_stream_event":
+        # エージェント状態の更新（オプション）
+        status_event = SSEEvent(
+            type="status",
+            message=f"エージェント状態更新: {event.agent.name}"
+        )
+        yield f"data: {status_event.model_dump_json()}\n\n"
 ```
 
-### 🚨 **高リスク要因**
+### 4. フロントエンド対応
 
-1. **システムプロンプト処理の変更**: LLMの応答パターンが変わる可能性
-2. **モデル変更の強制**: gpt-4.1 → gpt-4o でユーザー体験に影響
-3. **ストリーミング形式の不確実性**: `event.data.delta`の正確な形式が不明
-4. **エラーパターンの違い**: Agents SDK特有のエラーが既存処理で捕捉できない可能性
+#### 4.1 ツール実行状況の表示フロー
 
-### 📋 **実装前必須検証項目**
+**基本的な表示フロー：**
+1. ユーザーがメッセージ送信
+2. ツール実行が必要な場合：「○○○を実行中...」表示
+3. ツール実行完了後：最終的なテキストをストリーミング表示
 
-#### Phase 0: プロトタイプ検証
-1. **最小限のテストケース作成**: 1往復の会話で動作確認
-2. **event.data.deltaの形式確認**: 実際の出力内容・型の検証
-3. **エラーパターンの確認**: 意図的にエラーを発生させて動作確認
-4. **システムプロンプト効果の比較**: 現在と移行後の応答品質比較
+#### 4.2 状態管理の拡張
+```typescript
+interface ToolExecutionState {
+    isExecuting: boolean;
+    currentTool: string | null;
+    executionMessage: string | null;
+    executedTools: {
+        name: string;
+        output: string;
+        timestamp: number;
+    }[];
+}
 
-#### Phase 1: 機能検証
-1. **複数ターン会話**: 履歴が正しく引き継がれるか
-2. **日本語処理**: 日本語入力での応答が現在と同等か
-3. **ストリーミング速度**: 体感的な遅延がないか
-4. **長文処理**: max_tokens付近での動作確認
+interface MessageState {
+    content: string;
+    isStreaming: boolean;
+    toolExecution: ToolExecutionState;
+}
 
-#### Phase 2: 統合テスト
-1. **フロントエンド統合**: 実際のReactアプリでの動作確認
-2. **データベース整合性**: 保存されるメッセージ内容の検証
-3. **認証との連携**: JWT認証下での正常動作
-4. **エラーケース**: ネットワークエラー、タイムアウト等
+const [messageState, setMessageState] = useState<MessageState>({
+    content: '',
+    isStreaming: false,
+    toolExecution: {
+        isExecuting: false,
+        currentTool: null,
+        executionMessage: null,
+        executedTools: []
+    }
+});
+```
 
-### 🏁 **総合判定: 実装可能、ただし慎重な段階的アプローチが必要**
+#### 4.3 SSEイベント処理の詳細実装
+```typescript
+const handleSSEEvent = (data: SSEEvent) => {
+    switch (data.type) {
+        case 'tool_start':
+            setMessageState(prev => ({
+                ...prev,
+                toolExecution: {
+                    ...prev.toolExecution,
+                    isExecuting: true,
+                    currentTool: data.tool_name,
+                    executionMessage: getToolExecutionMessage(data.tool_name)
+                }
+            }));
+            break;
+        
+        case 'tool_end':
+            setMessageState(prev => ({
+                ...prev,
+                toolExecution: {
+                    ...prev.toolExecution,
+                    isExecuting: false,
+                    currentTool: null,
+                    executionMessage: null,
+                    executedTools: [
+                        ...prev.toolExecution.executedTools,
+                        {
+                            name: data.tool_name || 'unknown',
+                            output: data.tool_output || '',
+                            timestamp: Date.now()
+                        }
+                    ]
+                }
+            }));
+            break;
+        
+        case 'content':
+            // ツール実行完了後のテキストストリーミング
+            setMessageState(prev => ({
+                ...prev,
+                content: prev.content + data.content,
+                isStreaming: true
+            }));
+            break;
+        
+        case 'done':
+            setMessageState(prev => ({
+                ...prev,
+                isStreaming: false
+            }));
+            break;
+    }
+};
 
-**実装可能性**: ⭐⭐⭐⭐☆ (4/5)
-- 技術的には実装可能
-- ただし重要な不確実要素が複数存在
+// ツール実行メッセージの生成
+const getToolExecutionMessage = (toolName: string): string => {
+    const messages = {
+        'get_current_time': '現在時刻を取得中...',
+        'calculate': '計算を実行中...',
+        'web_search': 'Web検索を実行中...'
+    };
+    return messages[toolName] || `${toolName}を実行中...`;
+};
+```
 
-**推奨アプローチ**:
-1. **小規模プロトタイプでの検証** (1-2日)
-2. **段階的な実装とテスト** (3-5日)  
-3. **フォールバック機能の維持** (既存コードを残す)
-4. **十分な検証期間** (1週間)
+#### 4.4 UI コンポーネントの実装
+```typescript
+const ToolExecutionIndicator: React.FC<{ 
+    execution: ToolExecutionState 
+}> = ({ execution }) => {
+    if (!execution.isExecuting) return null;
+    
+    return (
+        <div className="tool-execution-indicator">
+            <div className="loading-spinner" />
+            <span className="execution-message">
+                {execution.executionMessage}
+            </span>
+        </div>
+    );
+};
 
-現在のspec.mdの内容は実装の方向性として適切だが、上記の課題を解決してからの実装を強く推奨。
+const MessageContent: React.FC<{ 
+    messageState: MessageState 
+}> = ({ messageState }) => {
+    return (
+        <div className="message-content">
+            {/* ツール実行中の表示 */}
+            <ToolExecutionIndicator execution={messageState.toolExecution} />
+            
+            {/* 実行済みツールの表示（オプション） */}
+            {messageState.toolExecution.executedTools.map((tool, index) => (
+                <div key={index} className="executed-tool">
+                    <span className="tool-name">{tool.name}</span>
+                    <span className="tool-output">{tool.output}</span>
+                </div>
+            ))}
+            
+            {/* メインコンテンツのストリーミング表示 */}
+            <div className="streaming-content">
+                {messageState.content}
+                {messageState.isStreaming && <span className="cursor">|</span>}
+            </div>
+        </div>
+    );
+};
+```
+
+#### 4.5 CSS スタイリング例
+```css
+.tool-execution-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: #f0f8ff;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    border-left: 3px solid #007bff;
+}
+
+.loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e3e3e3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.execution-message {
+    color: #007bff;
+    font-size: 14px;
+    font-style: italic;
+}
+
+.executed-tool {
+    background-color: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 4px 0;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.streaming-content {
+    line-height: 1.6;
+}
+
+.cursor {
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+```
+
+#### 4.6 ユーザーエクスペリエンスの考慮事項
+
+1. **実行時間の表示**
+   - 長時間実行されるツールの場合、経過時間を表示
+   - タイムアウトの警告表示
+
+2. **複数ツールの同時実行**
+   - 複数のツールが順次実行される場合の表示方法
+   - 進捗インジケーターの実装
+
+3. **エラーハンドリング**
+   - ツール実行失敗時の表示
+   - リトライ機能の提供
+
+4. **アクセシビリティ**
+   - スクリーンリーダー対応
+   - キーボードナビゲーション対応
+
+### 5. セキュリティ考慮事項
+
+#### 5.1 ツール実行の制限
+- `calculate`ツールでの安全な数式評価（evalの代替）
+- Web検索でのAPIキー管理とレート制限
+- ツール実行タイムアウト設定（デフォルト30秒）
+- 許可された文字のみでの入力検証
+
+#### 5.2 権限管理
+- ユーザー毎のツール使用権限設定
+- ツール実行ログの記録とモニタリング
+- 敏感な操作の認証確認
+
+#### 5.3 実装での安全性対策
+```python
+# 安全な数式評価の例
+import ast
+import operator
+
+def safe_eval(expression: str) -> float:
+    """安全な数式評価（evalの代替）"""
+    allowed_operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.USub: operator.neg,
+    }
+    # AST解析による安全な評価
+    # 詳細実装は省略
+```
+
+### 6. 段階的実装計画（改訂版）
+
+#### **Phase 1: 基盤構築とデータ保存**
+- **目的**: ツール機能の安全な導入と将来への準備
+- **データベース変更**: `Message.tool_metadata` カラム追加
+- **フロントエンド変更**: 最小限（軽微な表示追加）
+- **主要機能**:
+  - 基本ツール実装（時刻取得、計算）
+  - ツール実行情報の JSON 保存
+  - 軽微なツール概要表示
+
+#### **Phase 2: 詳細可視化と完全追跡**
+- **目的**: リアルタイム表示と詳細履歴機能
+- **データベース変更**: `ToolExecution` テーブル追加、Phase 1データ移行
+- **フロントエンド変更**: 段階的UI拡張（Phase 1互換性維持）
+- **主要機能**:
+  - 「📞→⏳→✅」段階表示
+  - 詳細なツール実行履歴
+  - Phase 1データの完全活用
+
+#### **重要な設計原則**
+1. **データ互換性**: Phase 1 → Phase 2 での完全なデータ保持
+2. **段階的変更**: 大幅な変更を避け、既存機能への影響最小化
+3. **後方互換性**: 各段階で既存機能の維持を保証
+4. **リスク管理**: データベースマイグレーションの安全性確保
+
+### 7. データベース変更の詳細
+
+#### Phase 1: 軽量拡張
+```sql
+-- Message テーブルに JSON カラム追加
+ALTER TABLE messages ADD COLUMN tool_metadata JSON;
+CREATE INDEX idx_messages_tool_metadata ON messages USING GIN (tool_metadata) WHERE tool_metadata IS NOT NULL;
+```
+
+#### Phase 2: 詳細テーブル追加
+```sql
+-- ToolExecution テーブル作成
+CREATE TABLE tool_executions (
+    id VARCHAR PRIMARY KEY,
+    message_id VARCHAR NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    execution_order INTEGER NOT NULL,
+    tool_call_id VARCHAR NOT NULL,
+    tool_name VARCHAR NOT NULL,
+    tool_arguments JSON,
+    call_status VARCHAR NOT NULL,
+    execution_status VARCHAR,
+    tool_output TEXT,
+    error_message TEXT,
+    called_at TIMESTAMP NOT NULL,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    execution_time_ms INTEGER
+);
+
+-- Message テーブルに詳細追跡フラグ追加
+ALTER TABLE messages ADD COLUMN has_detailed_executions BOOLEAN DEFAULT FALSE;
+```
+
+### 8. テスト計画（段階別）
+
+#### Phase 1 テスト
+- [ ] ツール関数の単体テスト
+- [ ] `tool_metadata` 保存の確認
+- [ ] 既存機能のリグレッションテスト
+- [ ] 軽微なフロントエンド表示の確認
+
+#### Phase 2 テスト
+- [ ] データ移行処理の検証
+- [ ] リアルタイム表示のテスト
+- [ ] 詳細履歴表示のテスト
+- [ ] Phase 1データとの統合表示テスト
+- [ ] パフォーマンス影響の測定
+
+### 9. リスク管理と対策
+
+#### データ関連リスク
+- **マイグレーション失敗**: 事前バックアップとロールバック計画
+- **データサイズ増加**: JSONカラムのサイズ監視とパージ戦略
+- **互換性問題**: 各段階での互換性テスト実施
+
+#### 運用リスク
+- **パフォーマンス低下**: 段階的デプロイと監視強化
+- **ツール実行エラー**: 詳細なエラーログとアラート
+- **フロントエンド表示問題**: 段階的UI更新とフォールバック
+
+### 10. 今後の拡張可能性
+
+#### 短期的拡張（6ヶ月以内）
+- ツール実行結果のキャッシュ機能
+- Web検索ツールの本格実装
+- エラー時の自動リトライ機能
+
+#### 中期的拡張（1年以内）
+- MCP (Model Context Protocol) 対応
+- カスタムツールの動的追加
+- ユーザー毎のツール権限管理
+
+#### 長期的展望（1年以上）
+- マルチエージェント対応
+- ツール実行の並列化
+- 高度な分析・監視ダッシュボード
+
+この段階的アプローチにより、安全かつ確実にツール機能を拡張し、将来の要求にも柔軟に対応できる基盤を構築します。
