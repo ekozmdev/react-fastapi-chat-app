@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Literal
 
 import uvicorn
@@ -9,22 +9,22 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from fastapi.security import HTTPAuthorizationCredentials
 from openai import AsyncOpenAI
-from passlib.context import CryptContext
 from pydantic import BaseModel
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    String,
-    Text,
-    create_engine,
+from sqlalchemy.orm import Session
+
+from .auth import (
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
+    authenticate_user,
+    create_access_token,
+    get_password_hash,
+    security,
+    verify_password,
+    verify_token,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, relationship, sessionmaker
+from .database import get_db
+from .models import Conversation, Message, User
 
 load_dotenv()
 
@@ -38,13 +38,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
-)
-# psycopg3 (psycopg) uses 'postgresql+psycopg' dialect
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -59,114 +52,8 @@ chat_agent = Agent(
     ),
 )
 
-# JWT設定
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
-)
-
-# パスワードハッシュ化（bcrypt使用）
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# JWT認証
-security = HTTPBearer()
 
 
-# ---------- DB Models ----------
-class User(Base):
-    __tablename__ = "users"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String, unique=True, nullable=False, index=True)
-    username = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at = Column(
-        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
-    )
-
-    # リレーション
-    conversations = relationship("Conversation", back_populates="user")
-
-
-class Conversation(Base):
-    __tablename__ = "conversations"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    title = Column(String, nullable=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at = Column(
-        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
-    )
-
-    # リレーション
-    user = relationship("User", back_populates="conversations")
-    messages = relationship(
-        "Message",
-        back_populates="conversation",
-        order_by="Message.created_at",
-        cascade="all, delete-orphan",
-    )
-
-
-class Message(Base):
-    __tablename__ = "messages"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False)
-    role = Column(String, nullable=False)
-    content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    conversation = relationship("Conversation", back_populates="messages")
-
-
-# Base.metadata.create_all(bind=engine)  # Alembicでマイグレーション管理するため無効化
-
-
-# ---------- 認証ヘルパー関数 ----------
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """パスワードを検証"""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    """パスワードをハッシュ化"""
-    return pwd_context.hash(password)
-
-
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """JWTアクセストークンを作成"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
-    else:
-        expire = datetime.now(UTC) + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    return encoded_jwt
-
-
-def verify_token(token: str) -> str | None:
-    """JWTトークンを検証してuser_idを返す"""
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            return None
-        return user_id
-    except JWTError:
-        return None
-
-
-def authenticate_user(db: Session, email: str, password: str) -> User | None:
-    """ユーザー認証"""
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        return None
-    if not verify_password(password, user.password_hash):
-        return None
-    return user
 
 
 # ---------- Pydantic ----------
@@ -212,14 +99,6 @@ class UserUpdateRequest(BaseModel):
 
 
 # ---------- Dependency ----------
-def get_db() -> Session:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),

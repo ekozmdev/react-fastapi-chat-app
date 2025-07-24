@@ -18,8 +18,6 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.main import User
-
 # プロジェクトのルートディレクトリをPythonパスに追加
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -27,6 +25,8 @@ from dotenv import load_dotenv
 from passlib.context import CryptContext
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+from app.models import User
 
 # 環境変数を読み込み
 load_dotenv()

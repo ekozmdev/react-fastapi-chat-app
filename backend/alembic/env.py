@@ -11,7 +11,7 @@ from alembic import context
 sys.path.append(str(Path(__file__).parent.parent))
 
 # app.mainからモデルをインポート
-from app.main import Base
+from app.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

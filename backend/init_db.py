@@ -9,7 +9,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
-from app.main import Base
+from app.models import Base
 
 load_dotenv()
 
