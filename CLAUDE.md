@@ -89,7 +89,7 @@ compose.yaml            # Docker Compose orchestration
 - Agent-based architecture enables future multi-agent and tool integration features
 - All code should be written in Japanese documentation style (see existing files)
 
-### Tool Use Implementation (Phase 1 & 2)
+### Tool Use Implementation (Phase 1, 2, 3, 4)
 - **Phase 1**: Basic tool functionality with minimal frontend changes
   - Tools defined in `app/tools.py` with `@function_tool` decorator
   - `AVAILABLE_TOOLS` list for easy extension
@@ -101,6 +101,17 @@ compose.yaml            # Docker Compose orchestration
   - Frontend UI components for tool execution status display with spinners and success/error states
   - Uses `RunItemStreamEvent` from openai-agents SDK for proper tool lifecycle tracking
   - Both Phase 1 (tool_metadata) and Phase 2 (detailed executions) data are preserved
+- **Phase 3**: JSON引数混入問題の根本的解決 (COMPLETED)
+  - `ResponseTextDeltaEvent` vs `ResponseFunctionCallArgumentsDeltaEvent` 型分離実装
+  - AI応答とツール引数の完全分離によりクリーンな会話体験実現
+  - ポストプロセシングフィルタリング排除、SDK正式利用パターン採用
+- **Phase 4**: 真のリアルタイムツール検出実装 (COMPLETED)
+  - **Phase 4.1**: deepwiki公式確認による技術的実現可能性確定
+  - **Phase 4.2**: `ResponseOutputItemAddedEvent`による革新的実装
+    - LLM決定瞬間での即座スピナー表示（人工遅延完全排除）
+    - 双方向重複防止ロジックで順序不問対応
+    - 空文字列エラーハンドリング、全エッジケース対応
+    - `tool_decision` SSEイベント型追加で既存互換性100%維持
 
 ## Environment Setup
 
