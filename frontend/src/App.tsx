@@ -578,27 +578,7 @@ const ChatApp: React.FC = () => {
         
         {!sidebarCollapsed && (
           <div className="sidebar-content">
-            <div className="user-info">
-          <div className="user-avatar">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M5 18c0-4 2.5-7 5-7s5 3 5 7" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          </div>
-          <div className="user-details">
-            <div className="username">{user?.username}</div>
-            <div className="user-email">{user?.email}</div>
-          </div>
-          <button type="button" className="logout-btn" onClick={logout} title="ログアウト">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M6 16L1 16L1 0L6 0" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M11 12L15 8L11 4" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M15 8L6 8" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          </button>
-        </div>
-
-        <button type="button" className="new-chat-btn" onClick={handleNewChat}>
+            <button type="button" className="new-chat-btn" onClick={handleNewChat}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
@@ -641,6 +621,26 @@ const ChatApp: React.FC = () => {
               </div>
             </div>
           ))}
+            </div>
+            
+            <div className="user-info">
+              <div className="user-avatar">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M5 18c0-4 2.5-7 5-7s5 3 5 7" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+              </div>
+              <div className="user-details">
+                <div className="username">{user?.username}</div>
+                <div className="user-email">{user?.email}</div>
+              </div>
+              <button type="button" className="logout-btn" onClick={logout} title="ログアウト">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M6 16L1 16L1 0L6 0" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M11 12L15 8L11 4" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M15 8L6 8" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+              </button>
             </div>
           </div>
         )}

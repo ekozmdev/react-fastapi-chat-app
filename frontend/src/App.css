@@ -239,7 +239,8 @@ body {
   background-color: #ffffff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  margin-bottom: 8px;
+  margin-top: auto;    /* 下部固定の核心 */
+  margin-bottom: 0;    /* 不要な下余白を除去 */
 }
 
 .user-avatar {
