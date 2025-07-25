@@ -2,11 +2,13 @@ import os
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Literal
+from typing import Any, Literal
 
 import uvicorn
 from agents import Agent, ModelSettings, Runner
+from agents.stream_events import RawResponsesStreamEvent
 from dotenv import load_dotenv
+from openai.types.responses import ResponseTextDeltaEvent, ResponseFunctionCallArgumentsDeltaEvent
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -41,6 +43,7 @@ app.add_middleware(
 )
 
 
+
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Agents SDK設定（Phase 1でツール機能を追加）
@@ -56,11 +59,8 @@ chat_agent = Agent(
         max_tokens=1024,
         temperature=0.7,
     ),
-    tools=AVAILABLE_TOOLS  # tools.pyで定義されたツールを自動で利用
+    tools=AVAILABLE_TOOLS,  # tools.pyで定義されたツールを自動で利用
 )
-
-
-
 
 
 # ---------- Pydantic ----------
@@ -74,50 +74,52 @@ class ChatRequest(BaseModel):
 # Phase 1: ツール実行追跡クラス
 class ToolExecutionTracker:
     """ツール実行の追跡とメタデータ生成を管理"""
-    
+
     def __init__(self):
-        self.tools_used: List[Dict[str, Any]] = []
-        self.current_tool: Dict[str, Any] | None = None
-        
-    def start_tool(self, tool_name: str, arguments: Dict[str, Any]) -> None:
+        self.tools_used: list[dict[str, Any]] = []
+        self.current_tool: dict[str, Any] | None = None
+
+    def start_tool(self, tool_name: str, arguments: dict[str, Any]) -> None:
         """ツール実行開始"""
         self.current_tool = {
             "name": tool_name,
             "input": arguments,
             "start_time": time.time() * 1000,  # ミリ秒
-            "status": "executing"
+            "status": "executing",
         }
-        
+
     def complete_tool(self, output: str = None, error: str = None) -> None:
         """ツール実行完了"""
         if self.current_tool:
             execution_time = int(time.time() * 1000 - self.current_tool["start_time"])
-            self.current_tool.update({
-                "output": output,
-                "error": error,
-                "status": "success" if not error else "error",
-                "execution_time_ms": execution_time
-            })
+            self.current_tool.update(
+                {
+                    "output": output,
+                    "error": error,
+                    "status": "success" if not error else "error",
+                    "execution_time_ms": execution_time,
+                }
+            )
             self.tools_used.append(self.current_tool)
             self.current_tool = None
-            
-    def get_metadata(self) -> Dict[str, Any] | None:
+
+    def get_metadata(self) -> dict[str, Any] | None:
         """tool_metadataを生成"""
         if not self.tools_used:
             return None
-            
+
         success_count = sum(1 for t in self.tools_used if t["status"] == "success")
         error_count = len(self.tools_used) - success_count
         total_time = sum(t["execution_time_ms"] for t in self.tools_used)
-        
+
         return {
             "tools_used": self.tools_used,
             "summary": {
                 "total_tools": len(self.tools_used),
                 "total_time_ms": total_time,
                 "success_count": success_count,
-                "error_count": error_count
-            }
+                "error_count": error_count,
+            },
         }
 
 
@@ -464,72 +466,91 @@ async def stream_chat(
 
             async for event in result.stream_events():
                 # Phase 1: ツール実行イベントの処理
-                if hasattr(event, 'item') and hasattr(event.item, 'type'):
-                    
+                if hasattr(event, "item") and hasattr(event.item, "type"):
                     if event.item.type == "tool_call_item":
                         # ツール呼び出し開始
                         # raw_itemから正確な情報を取得
                         raw_item = event.item.raw_item
-                        tool_name = raw_item.get('name') if hasattr(raw_item, 'get') else getattr(raw_item, 'name', 'unknown')
-                        arguments = raw_item.get('arguments', {}) if hasattr(raw_item, 'get') else getattr(raw_item, 'arguments', {})
-                        call_id = getattr(event.item, 'id', f'call_{int(time.time() * 1000)}')
-                        
-                        print(f"Tool call started: name={tool_name}, call_id={call_id}, args={arguments}")
-                        
+                        tool_name = (
+                            raw_item.get("name")
+                            if hasattr(raw_item, "get")
+                            else getattr(raw_item, "name", "unknown")
+                        )
+                        arguments = (
+                            raw_item.get("arguments", {})
+                            if hasattr(raw_item, "get")
+                            else getattr(raw_item, "arguments", {})
+                        )
+                        call_id = getattr(
+                            event.item, "id", f"call_{int(time.time() * 1000)}"
+                        )
+
+                        print(
+                            f"Tool call started: name={tool_name}, call_id={call_id}, args={arguments}"
+                        )
+
                         tool_tracker.start_tool(tool_name, arguments)
-                        
+
                         # フロントエンドにツール開始イベントを送信
                         tool_start_event = SSEEvent(
                             type="tool_start",
                             message_id=assistant_id,
                             tool_name=tool_name,
-                            execution_id=call_id
+                            execution_id=call_id,
                         )
-                        print(f"Sending tool_start event: {tool_start_event.model_dump_json()}")
+                        print(
+                            f"Sending tool_start event: {tool_start_event.model_dump_json()}"
+                        )
                         yield f"data: {tool_start_event.model_dump_json()}\n\n"
-                        
+
                     elif event.item.type == "tool_call_output_item":
                         # ツール実行完了
-                        output = getattr(event.item, 'output', '')
-                        error = getattr(event.item, 'error', None)
-                        call_id = getattr(event.item, 'tool_call_id', 'unknown_call')
-                        
+                        output = getattr(event.item, "output", "")
+                        error = getattr(event.item, "error", None)
+                        call_id = getattr(event.item, "tool_call_id", "unknown_call")
+
                         # 前回開始したツールの名前を使用
-                        tool_name = tool_tracker.current_tool['name'] if tool_tracker.current_tool else 'unknown'
-                        
-                        print(f"Tool call completed: call_id={call_id}, output={output}")
-                        
+                        tool_name = (
+                            tool_tracker.current_tool["name"]
+                            if tool_tracker.current_tool
+                            else "unknown"
+                        )
+
+                        print(
+                            f"Tool call completed: call_id={call_id}, output={output}"
+                        )
+
                         tool_tracker.complete_tool(output=output, error=error)
-                        
+
                         # フロントエンドにツール完了イベントを送信
                         tool_complete_event = SSEEvent(
                             type="tool_complete",
                             message_id=assistant_id,
                             tool_name=tool_name,
                             tool_output=output,
-                            execution_id=call_id
+                            execution_id=call_id,
                         )
-                        print(f"Sending tool_complete event: {tool_complete_event.model_dump_json()}")
+                        print(
+                            f"Sending tool_complete event: {tool_complete_event.model_dump_json()}"
+                        )
                         yield f"data: {tool_complete_event.model_dump_json()}\n\n"
-                
-                elif event.type == "raw_response_event":
-                    # delta の存在と内容を慎重にチェック
-                    if (
-                        hasattr(event, "data")
-                        and hasattr(event.data, "delta")
-                        and event.data.delta is not None
-                        and isinstance(event.data.delta, str)
-                    ):
-                        content = str(event.data.delta)
-                        # JSONの引数文字列を除外（Phase 1で発見した問題の対策）
-                        if content.strip() not in ['{}', '']:
-                            assistant_content += content
 
+                elif event.type == "raw_response_event":
+                    # RawResponsesStreamEventかどうかをまず確認
+                    if isinstance(event, RawResponsesStreamEvent):
+                        # 型チェックによる完全分離（フィルタリング不要）
+                        if isinstance(event.data, ResponseTextDeltaEvent):
+                            content = event.data.delta  # 純粋なAI応答のみ
+                            assistant_content += content
+                            
                             # コンテンツストリーミング
                             content_event = SSEEvent(
                                 type="content", content=content, message_id=assistant_id
                             )
                             yield f"data: {content_event.model_dump_json()}\n\n"
+                        elif isinstance(event.data, ResponseFunctionCallArgumentsDeltaEvent):
+                            # ツール引数は完全に無視（デバッグ用ログのみ）
+                            print(f"Tool arguments ignored: {event.data.delta}")
 
             # Phase 1: ツールメタデータを含めてアシスタントメッセージを保存
             tool_metadata = tool_tracker.get_metadata()
