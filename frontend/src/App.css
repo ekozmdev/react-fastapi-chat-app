@@ -159,13 +159,75 @@ body {
 
 /* サイドバー */
 .sidebar {
-  width: 260px;
   background-color: #f3f3f3;
   border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
   padding: 12px;
   gap: 12px;
+  transition: width 0.3s ease-in-out;
+  overflow: hidden; /* コンテンツはみ出し防止 */
+}
+
+.sidebar.expanded {
+  width: 260px;
+}
+
+.sidebar.collapsed {
+  width: 48px; /* 36px → 48px に拡張して左右余白を確保 */
+}
+
+/* サイドバートグルボタン */
+.sidebar-toggle {
+  display: flex;
+  padding: 4px;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+}
+
+/* 展開時: ボタンを右側に配置 */
+.sidebar.expanded .sidebar-toggle {
+  justify-content: flex-end;
+}
+
+/* 収納時: ボタンを中央に配置 */
+.sidebar.collapsed .sidebar-toggle {
+  justify-content: center;
+}
+
+.sidebar-toggle button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #666;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.sidebar-toggle button:hover {
+  background-color: #e5e5e5;
+  color: #333;
+}
+
+.sidebar-toggle button:active {
+  transform: scale(0.95);
+}
+
+/* サイドバーコンテンツ */
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0; /* テキスト省略対応 */
+  flex: 1;
 }
 
 /* ユーザー情報 */
@@ -742,12 +804,8 @@ body {
   margin-top: 4px;
 }
 
-/* レスポンシブデザイン */
+/* レスポンシブ対応: 768px制限を撤廃してトグル式サイドバーに統一 */
 @media (max-width: 768px) {
-  .sidebar {
-    display: none;
-  }
-  
   .messages {
     padding: 0 16px;
   }

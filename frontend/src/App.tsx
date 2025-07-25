@@ -60,6 +60,7 @@ const ChatApp: React.FC = () => {
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -563,8 +564,21 @@ const ChatApp: React.FC = () => {
   return (
     <div className="app">
       {/* ------------- sidebar ------------- */}
-      <div className="sidebar">
-        <div className="user-info">
+      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}>
+        <div className="sidebar-toggle">
+          <button 
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={sidebarCollapsed ? 'サイドバーを開く' : 'サイドバーを閉じる'}
+            aria-label={sidebarCollapsed ? 'サイドバーを開く' : 'サイドバーを閉じる'}
+          >
+            {sidebarCollapsed ? '>' : '<'}
+          </button>
+        </div>
+        
+        {!sidebarCollapsed && (
+          <div className="sidebar-content">
+            <div className="user-info">
           <div className="user-avatar">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <circle cx="10" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
@@ -627,7 +641,9 @@ const ChatApp: React.FC = () => {
               </div>
             </div>
           ))}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ------------- main ------------- */}
