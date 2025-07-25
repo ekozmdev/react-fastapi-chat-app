@@ -1149,3 +1149,122 @@ class SSEEvent(BaseModel):
 - 自動リトライ機能
 
 Phase 2の実装により、ユーザーはツール実行の全工程を可視化でき、過去の会話でも完全な実行履歴を確認できるようになります。
+
+## 会話中に追加された要件と仕様変更
+
+### UI/UX 要件の大幅な簡素化
+
+#### 1. **ツール表示の簡素化**（優先度：高）
+- **変更前**: 複雑な段階表示「📞呼び出し中」→「⏳実行中」→「✅完了」
+- **変更後**: シンプルな表示「🔄 関数名 実行中...」→「✅ 関数名 完了」+ 結果
+- **理由**: ユーザーが求めているのは複雑なステータス追跡ではなく、シンプルな関数実行表示
+
+#### 2. **ツール名の表示方式**（優先度：高）
+- **要件**: 関数名をそのまま表示（日本語変換不要）
+- **例**: `get_current_time`, `calculate` をそのまま表示
+- **理由**: 開発者向け表示として分かりやすさを重視
+
+#### 3. **スピナー機能の追加**（優先度：中）
+- **AIアバタースピナー**: ストリーミング中の表示
+- **ツール実行スピナー**: 関数実行中の個別スピナー
+- **配置**: ツール実行結果表示エリアの最下部
+- **タイミング**: ユーザー入力完了→即座にスピナー表示
+
+#### 4. **即座の関数名表示の技術的制約**（優先度：低）
+- **要望**: ツール実行開始時に関数名を即座に表示
+- **制約**: openai-agents-python SDKの`RunItemStreamEvent`の`tool_call_item`イベントは実行完了後に発生
+- **対応**: 技術的制約により実装困難、代替案として簡素化されたUI実装
+
+### データベース設計の簡素化
+
+#### 1. **ステータス管理の簡素化**
+- **変更前**: `call_status` (called, executing, completed, failed) + `execution_status` (success, error, timeout, skipped)
+- **変更後**: シンプルな `status` (pending, executing, completed, error)
+- **理由**: 複雑なステータス管理よりも単純な状態遷移を重視
+
+#### 2. **SSEイベント構造の簡素化**
+```typescript
+// 簡素化されたSSEイベント
+interface SSEEvent {
+    type: 'tool_start' | 'tool_complete' | 'content' | 'done' | 'error';
+    message_id?: string;
+    tool_name?: string;
+    tool_output?: string;
+    execution_id?: string;
+    content?: string;
+}
+```
+
+### フロントエンド実装の簡素化
+
+#### 1. **ToolExecution インターフェースの簡素化**
+```typescript
+interface ToolExecution {
+    id: string;
+    name: string;
+    status: 'executing' | 'completed';
+    output?: string;
+}
+```
+
+#### 2. **UI コンポーネントの簡素化**
+- **削除**: 複雑なステータス表示、実行順序表示、詳細なエラー表示
+- **保持**: 関数名、実行状態、結果のみ
+- **スタイル**: ミニマルなデザイン（複雑なボーダーカラー等は削除）
+
+### 開発・デバッグ要件
+
+#### 1. **デバッグ機能の追加**
+- **tools.py**: `sleep(5)` + `print()` によるデバッグ機能
+- **用途**: ツール実行タイミングの可視化とテスト
+- **例**:
+```python
+@function_tool
+def get_current_time() -> str:
+    print("Tool execution starting... waiting 5 seconds")
+    time.sleep(5)
+    print("Tool execution completed!")
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+```
+
+#### 2. **開発時の制約事項**
+- **package.json**: スクリプトへのオプション追加禁止（CLAUDE.mdに記録済み）
+- **linter**: バックエンドはruff使用
+- **eval()**: セキュリティ問題は考慮不要（サンプル関数のため）
+
+### 実装の優先順位（簡素化版）
+
+#### Phase 2-A: 基本実装（簡素化）
+1. ✅ ToolExecutionテーブル作成（簡素化版）
+2. ✅ ToolExecutionManager実装（簡素化版）
+3. ✅ 基本SSEイベント（tool_start, tool_complete）
+4. ✅ フロントエンド簡素化UI
+
+#### Phase 2-B: UI完成
+1. スピナー機能実装
+2. 最終的なスタイリング調整
+3. デバッグ機能の削除
+
+#### Phase 2-C: 統合テスト
+1. 簡素化された実装の動作確認
+2. パフォーマンステスト
+3. 既存Phase 1機能との互換性確認
+
+### 学んだ教訓の活用
+
+#### 1. **実装が複雑すぎた問題**
+- **問題**: Phase 2当初の仕様が過度に複雑
+- **解決**: ユーザーニーズに合わせた大幅な簡素化
+- **教訓**: MVPでの機能実装、後から段階的拡張
+
+#### 2. **SSE実装の技術的制約**
+- **問題**: openai-agents SDKのイベントタイミング制約
+- **解決**: 技術制約に合わせた設計変更
+- **教訓**: 外部ライブラリの制約を早期に把握
+
+#### 3. **UI/UXの方向性転換**
+- **問題**: 詳細な状態管理がユーザーに不要
+- **解決**: シンプルな関数名+結果表示
+- **教訓**: ユーザーフィードバックに基づく仕様変更の重要性
+
+この簡素化された要件により、Phase 2実装は大幅にシンプルになり、実用的なツール実行可視化機能を提供できます。

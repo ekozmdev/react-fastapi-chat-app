@@ -122,12 +122,13 @@ class ToolExecutionTracker:
 
 
 class SSEEvent(BaseModel):
-    type: Literal["status", "content", "done", "error"]
+    type: Literal["status", "content", "done", "error", "tool_start", "tool_complete"]
     message: str | None = None
     content: str | None = None
     message_id: str | None = None
     tool_name: str | None = None
-    step: str | None = None
+    tool_output: str | None = None
+    execution_id: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -464,16 +465,52 @@ async def stream_chat(
             async for event in result.stream_events():
                 # Phase 1: ツール実行イベントの処理
                 if hasattr(event, 'item') and hasattr(event.item, 'type'):
+                    
                     if event.item.type == "tool_call_item":
                         # ツール呼び出し開始
-                        tool_name = getattr(event.item, 'name', 'unknown')
-                        arguments = getattr(event.item, 'arguments', {})
+                        # raw_itemから正確な情報を取得
+                        raw_item = event.item.raw_item
+                        tool_name = raw_item.get('name') if hasattr(raw_item, 'get') else getattr(raw_item, 'name', 'unknown')
+                        arguments = raw_item.get('arguments', {}) if hasattr(raw_item, 'get') else getattr(raw_item, 'arguments', {})
+                        call_id = getattr(event.item, 'id', f'call_{int(time.time() * 1000)}')
+                        
+                        print(f"Tool call started: name={tool_name}, call_id={call_id}, args={arguments}")
+                        
                         tool_tracker.start_tool(tool_name, arguments)
+                        
+                        # フロントエンドにツール開始イベントを送信
+                        tool_start_event = SSEEvent(
+                            type="tool_start",
+                            message_id=assistant_id,
+                            tool_name=tool_name,
+                            execution_id=call_id
+                        )
+                        print(f"Sending tool_start event: {tool_start_event.model_dump_json()}")
+                        yield f"data: {tool_start_event.model_dump_json()}\n\n"
+                        
                     elif event.item.type == "tool_call_output_item":
                         # ツール実行完了
                         output = getattr(event.item, 'output', '')
                         error = getattr(event.item, 'error', None)
+                        call_id = getattr(event.item, 'tool_call_id', 'unknown_call')
+                        
+                        # 前回開始したツールの名前を使用
+                        tool_name = tool_tracker.current_tool['name'] if tool_tracker.current_tool else 'unknown'
+                        
+                        print(f"Tool call completed: call_id={call_id}, output={output}")
+                        
                         tool_tracker.complete_tool(output=output, error=error)
+                        
+                        # フロントエンドにツール完了イベントを送信
+                        tool_complete_event = SSEEvent(
+                            type="tool_complete",
+                            message_id=assistant_id,
+                            tool_name=tool_name,
+                            tool_output=output,
+                            execution_id=call_id
+                        )
+                        print(f"Sending tool_complete event: {tool_complete_event.model_dump_json()}")
+                        yield f"data: {tool_complete_event.model_dump_json()}\n\n"
                 
                 elif event.type == "raw_response_event":
                     # delta の存在と内容を慎重にチェック
@@ -484,18 +521,15 @@ async def stream_chat(
                         and isinstance(event.data.delta, str)
                     ):
                         content = str(event.data.delta)
-                        assistant_content += content
+                        # JSONの引数文字列を除外（Phase 1で発見した問題の対策）
+                        if content.strip() not in ['{}', '']:
+                            assistant_content += content
 
-                        # コンテンツストリーミング
-                        content_event = SSEEvent(
-                            type="content", content=content, message_id=assistant_id
-                        )
-                        yield f"data: {content_event.model_dump_json()}\n\n"
-                    else:
-                        # デバッグ用: 予期しない形式をログ出力
-                        print(
-                            f"Unexpected event.data format: {type(event.data)}, {event.data}"
-                        )
+                            # コンテンツストリーミング
+                            content_event = SSEEvent(
+                                type="content", content=content, message_id=assistant_id
+                            )
+                            yield f"data: {content_event.model_dump_json()}\n\n"
 
             # Phase 1: ツールメタデータを含めてアシスタントメッセージを保存
             tool_metadata = tool_tracker.get_metadata()

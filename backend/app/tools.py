@@ -5,6 +5,7 @@ Phase 1: ツール機能実装
 
 import ast
 import operator
+import time
 from datetime import UTC, datetime
 
 from agents import function_tool
@@ -13,6 +14,10 @@ from agents import function_tool
 @function_tool
 def get_current_time() -> str:
     """現在の時刻を取得します。"""
+    # デバッグ用：長時間実行をシミュレート
+    print("Tool execution starting... waiting 5 seconds")
+    time.sleep(5)
+    print("Tool execution completed!")
     return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 

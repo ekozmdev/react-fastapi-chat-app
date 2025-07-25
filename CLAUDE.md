@@ -17,8 +17,10 @@ This is a React + FastAPI chat application with real-time Server-Sent Events (SS
 ### Frontend (in `/frontend/`)
 ```bash
 npm run dev          # Start Vite dev server on :3000
-npm run build        # Build for production (runs tsc + vite build)
-npm run lint         # ESLint with TypeScript support
+npm run build        # Build for production (runs tsc + vite build)  
+npm run lint         # Biome lint (DO NOT add options to package.json scripts)
+npm run format       # Biome format
+npm run check        # Biome check
 npm run preview      # Preview production build
 ```
 
@@ -74,7 +76,8 @@ compose.yaml            # Docker Compose orchestration
 
 ### Database Schema
 - `conversations`: id (UUID), title, created_at, updated_at
-- `messages`: id (UUID), conversation_id (FK), role, content, created_at
+- `messages`: id (UUID), conversation_id (FK), role, content, created_at, tool_metadata (JSON), has_detailed_executions (Boolean)
+- `tool_executions`: id (UUID), message_id (FK), tool_name, tool_arguments (JSON), call_status, execution_status, tool_output, execution_time_ms, etc. (Phase 2)
 - Uses UUID primary keys and proper foreign key relationships
 
 ### Technology Migration Notes
@@ -85,6 +88,19 @@ compose.yaml            # Docker Compose orchestration
 - SSE provides foundation for future Function Calling/MCP tool status display
 - Agent-based architecture enables future multi-agent and tool integration features
 - All code should be written in Japanese documentation style (see existing files)
+
+### Tool Use Implementation (Phase 1 & 2)
+- **Phase 1**: Basic tool functionality with minimal frontend changes
+  - Tools defined in `app/tools.py` with `@function_tool` decorator
+  - `AVAILABLE_TOOLS` list for easy extension
+  - `tool_metadata` JSON column in messages table for backward compatibility
+- **Phase 2**: Real-time tool execution visualization (COMPLETED)
+  - `ToolExecution` table for detailed execution tracking
+  - `ToolExecutionManager` class for database-connected tool lifecycle management
+  - Real-time SSE events: `tool_start`, `tool_complete` with execution details
+  - Frontend UI components for tool execution status display with spinners and success/error states
+  - Uses `RunItemStreamEvent` from openai-agents SDK for proper tool lifecycle tracking
+  - Both Phase 1 (tool_metadata) and Phase 2 (detailed executions) data are preserved
 
 ## Environment Setup
 
@@ -109,9 +125,10 @@ compose.yaml            # Docker Compose orchestration
 
 ### TypeScript (Frontend)
 - Strict TypeScript configuration
-- ESLint with React hooks rules
+- Biome for linting and formatting
 - Minimal external dependencies (only React essentials)
 - Component-based architecture
+- **IMPORTANT**: DO NOT add command-line options to package.json scripts (禁止)
 
 ## Testing
 

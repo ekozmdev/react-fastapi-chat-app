@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 
@@ -35,8 +35,18 @@ class Message(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     
-    # Phase 1で追加：ツール実行メタデータ
+    # Phase 1で追加：ツール実行メタデータ（保持）
     tool_metadata = Column(JSON, nullable=True)
+    
+    # Phase 2で追加：詳細追跡の有無
+    has_detailed_executions = Column(Boolean, default=False)
 
     # リレーション
-    conversation = relationship("Conversation", back_populates="messages")
+    conversation = relationship("Conversation", back_populates="messages")  
+    # Phase 2で追加：詳細なツール実行記録
+    tool_executions = relationship(
+        "ToolExecution", 
+        back_populates="message",
+        order_by="ToolExecution.execution_order",
+        cascade="all, delete-orphan"
+    )

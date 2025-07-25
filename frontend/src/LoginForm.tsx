@@ -20,7 +20,7 @@ const LoginForm: React.FC = () => {
       if (!success) {
         setError('メールアドレスまたはパスワードが正しくありません');
       }
-    } catch (error) {
+    } catch (_error) {
       setError('ログインに失敗しました。再度お試しください。');
     } finally {
       setIsLoading(false);
