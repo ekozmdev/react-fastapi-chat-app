@@ -166,11 +166,68 @@ const ChatApp: React.FC = () => {
                     case 'status':
                       // ステータスは表示しない
                       break;
-                    case 'tool_start':
-                      // ツール実行開始：関数名と「実行中...」を表示
+                    case 'tool_decision':
+                      // 🆕 Phase 4.2: LLM決定時点でスピナー即座表示開始
+                      console.log(`🚀 Tool decision detected: ${data.tool_name}`);
                       setStreamingMessage((prev) => {
+                        const executionId = data.execution_id || `${data.tool_name}_${Date.now()}`;
+                        
+                        // 🛡️ 双方向重複チェック: tool_startで既にエントリが存在するかチェック
+                        const existingExecution = prev?.toolExecutions.find(exec => 
+                          exec.id === executionId || 
+                          exec.name === data.tool_name ||
+                          (data.execution_id && exec.id === data.execution_id)
+                        );
+                        
+                        if (existingExecution) {
+                          // 既にtool_startで作成済み → スキップ
+                          console.log(`⚠️ Tool execution already exists for ${data.tool_name}, skipping tool_decision`);
+                          return prev;
+                        }
+
                         const newExecution: ToolExecution = {
-                          id: data.execution_id || `${data.tool_name}_${Date.now()}`,
+                          id: executionId,
+                          name: data.tool_name,
+                          status: 'executing',
+                        };
+
+                        if (!prev) {
+                          // ストリーミングメッセージがまだない場合は作成
+                          return {
+                            id: data.message_id,
+                            content: '',
+                            isStreaming: true,
+                            toolExecutions: [newExecution],
+                          };
+                        }
+
+                        return {
+                          ...prev,
+                          toolExecutions: [...prev.toolExecutions, newExecution],
+                        };
+                      });
+                      break;
+                    case 'tool_start':
+                      // ✅ 双方向重複チェック: tool_decisionで既にエントリが存在するかチェック
+                      setStreamingMessage((prev) => {
+                        const executionId = data.execution_id || `${data.tool_name}_${Date.now()}`;
+                        
+                        // 🛡️ 強化された重複チェック: より正確なID照合
+                        const existingExecution = prev?.toolExecutions.find(exec => 
+                          exec.id === executionId || 
+                          exec.name === data.tool_name ||
+                          (data.execution_id && exec.id === data.execution_id)
+                        );
+                        
+                        if (existingExecution) {
+                          // 既にtool_decisionで作成済み → スキップ
+                          console.log(`⚠️ Tool execution already exists for ${data.tool_name}, skipping tool_start`);
+                          return prev;
+                        }
+
+                        // 新規ツール実行の場合のみ作成
+                        const newExecution: ToolExecution = {
+                          id: executionId,
                           name: data.tool_name,
                           status: 'executing',
                         };

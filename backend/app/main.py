@@ -8,7 +8,12 @@ import uvicorn
 from agents import Agent, ModelSettings, Runner
 from agents.stream_events import RawResponsesStreamEvent
 from dotenv import load_dotenv
-from openai.types.responses import ResponseTextDeltaEvent, ResponseFunctionCallArgumentsDeltaEvent
+from openai.types.responses import (
+    ResponseTextDeltaEvent, 
+    ResponseFunctionCallArgumentsDeltaEvent,
+    ResponseOutputItemAddedEvent,
+    ResponseFunctionToolCall
+)
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -124,7 +129,7 @@ class ToolExecutionTracker:
 
 
 class SSEEvent(BaseModel):
-    type: Literal["status", "content", "done", "error", "tool_start", "tool_complete"]
+    type: Literal["status", "content", "done", "error", "tool_start", "tool_complete", "tool_decision"]
     message: str | None = None
     content: str | None = None
     message_id: str | None = None
@@ -538,8 +543,35 @@ async def stream_chat(
                 elif event.type == "raw_response_event":
                     # RawResponsesStreamEventかどうかをまず確認
                     if isinstance(event, RawResponsesStreamEvent):
-                        # 型チェックによる完全分離（フィルタリング不要）
-                        if isinstance(event.data, ResponseTextDeltaEvent):
+                        # 🆕 Phase 4.2: ツール決定の即座検出（実行前！）
+                        if isinstance(event.data, ResponseOutputItemAddedEvent):
+                            if isinstance(event.data.item, ResponseFunctionToolCall):
+                                tool_name = event.data.item.name
+                                call_id = event.data.item.call_id
+                                
+                                # 🛡️ エラーハンドリング: 空文字列チェック
+                                if not tool_name:
+                                    print("⚠️ Warning: tool_name is empty for ResponseFunctionToolCall (streaming in progress)")
+                                    continue  # 空の場合はスキップ、後続チャンクを待つ
+                                
+                                if not call_id:
+                                    print("⚠️ Warning: call_id is empty for ResponseFunctionToolCall (streaming in progress)")
+                                    continue  # 空の場合はスキップ、後続チャンクを待つ
+                                
+                                print(f"🚀 LLM decided to use tool: {tool_name} (ID: {call_id})")
+                                
+                                # 即座にtool_decisionイベントを送信
+                                tool_decision_event = SSEEvent(
+                                    type="tool_decision",
+                                    message_id=assistant_id,
+                                    tool_name=tool_name,
+                                    execution_id=call_id,
+                                )
+                                print(f"Sending tool_decision event: {tool_decision_event.model_dump_json()}")
+                                yield f"data: {tool_decision_event.model_dump_json()}\n\n"
+                        
+                        # ✅ Phase 3実装: 型チェックによる完全分離（フィルタリング不要）
+                        elif isinstance(event.data, ResponseTextDeltaEvent):
                             content = event.data.delta  # 純粋なAI応答のみ
                             assistant_content += content
                             
