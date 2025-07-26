@@ -368,6 +368,44 @@ async def list_conversations(
     }
 
 
+# Phase 7: tool_metadata → toolExecutions 変換関数
+def convert_tool_metadata_to_executions(tool_metadata: dict[str, Any] | None) -> list[dict[str, Any]] | None:
+    """
+    Phase 1で保存されたtool_metadataをフロントエンド期待形式のtoolExecutionsに変換
+    
+    Args:
+        tool_metadata: Phase 1で保存されたツール実行メタデータ
+        
+    Returns:
+        フロントエンド用のtoolExecutions配列、または None（ツール実行なしの場合）
+    """
+    if not tool_metadata or not isinstance(tool_metadata, dict):
+        return None
+        
+    tools_used = tool_metadata.get("tools_used")
+    if not tools_used or not isinstance(tools_used, list):
+        return None
+    
+    executions = []
+    for i, tool in enumerate(tools_used):
+        # 必要なフィールドの存在確認
+        if not isinstance(tool, dict) or "name" not in tool:
+            continue
+            
+        # 一意IDの生成（name + index + start_time）
+        start_time = tool.get("start_time", 0)
+        execution_id = f"{tool['name']}_{i}_{int(start_time) if start_time else 0}"
+        
+        executions.append({
+            "id": execution_id,
+            "name": tool["name"],
+            "status": "completed",  # 履歴では常に完了済み
+            "output": tool.get("output", "")  # 実行結果（空文字列でもOK）
+        })
+    
+    return executions if executions else None
+
+
 @app.get("/api/conversations/{conversation_id}")
 async def get_conversation(
     conversation_id: str,
@@ -396,6 +434,7 @@ async def get_conversation(
                 "role": m.role,
                 "content": m.content,
                 "timestamp": m.created_at,
+                "toolExecutions": convert_tool_metadata_to_executions(m.tool_metadata),
             }
             for m in conv.messages
         ],

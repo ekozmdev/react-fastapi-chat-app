@@ -705,14 +705,10 @@ const ChatApp: React.FC = () => {
                   }
                   <div className="message-text">
                     <MarkdownRenderer content={streamingMessage.content} />
-                    {streamingMessage.isStreaming && <span className="typing-indicator">▊</span>}
+                    {streamingMessage.isStreaming && 
+                     streamingMessage.toolExecutions.every(tool => tool.status === 'completed') && 
+                     <span className="typing-indicator">▊</span>}
                   </div>
-                  {/* ストリーミング中のスピナーを一番下に表示 */}
-                  {streamingMessage.isStreaming && (
-                    <div className="message-spinner">
-                      <div className="streaming-spinner"></div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
