@@ -8,17 +8,17 @@ import uvicorn
 from agents import Agent, ModelSettings, Runner
 from agents.stream_events import RawResponsesStreamEvent
 from dotenv import load_dotenv
-from openai.types.responses import (
-    ResponseTextDeltaEvent, 
-    ResponseFunctionCallArgumentsDeltaEvent,
-    ResponseOutputItemAddedEvent,
-    ResponseFunctionToolCall
-)
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from openai import AsyncOpenAI
+from openai.types.responses import (
+    ResponseFunctionCallArgumentsDeltaEvent,
+    ResponseFunctionToolCall,
+    ResponseOutputItemAddedEvent,
+    ResponseTextDeltaEvent,
+)
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -46,7 +46,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -129,7 +128,15 @@ class ToolExecutionTracker:
 
 
 class SSEEvent(BaseModel):
-    type: Literal["status", "content", "done", "error", "tool_start", "tool_complete", "tool_decision"]
+    type: Literal[
+        "status",
+        "content",
+        "done",
+        "error",
+        "tool_start",
+        "tool_complete",
+        "tool_decision",
+    ]
     message: str | None = None
     content: str | None = None
     message_id: str | None = None
@@ -369,40 +376,44 @@ async def list_conversations(
 
 
 # Phase 7: tool_metadata → toolExecutions 変換関数
-def convert_tool_metadata_to_executions(tool_metadata: dict[str, Any] | None) -> list[dict[str, Any]] | None:
+def convert_tool_metadata_to_executions(
+    tool_metadata: dict[str, Any] | None,
+) -> list[dict[str, Any]] | None:
     """
     Phase 1で保存されたtool_metadataをフロントエンド期待形式のtoolExecutionsに変換
-    
+
     Args:
         tool_metadata: Phase 1で保存されたツール実行メタデータ
-        
+
     Returns:
         フロントエンド用のtoolExecutions配列、または None（ツール実行なしの場合）
     """
     if not tool_metadata or not isinstance(tool_metadata, dict):
         return None
-        
+
     tools_used = tool_metadata.get("tools_used")
     if not tools_used or not isinstance(tools_used, list):
         return None
-    
+
     executions = []
     for i, tool in enumerate(tools_used):
         # 必要なフィールドの存在確認
         if not isinstance(tool, dict) or "name" not in tool:
             continue
-            
+
         # 一意IDの生成（name + index + start_time）
         start_time = tool.get("start_time", 0)
         execution_id = f"{tool['name']}_{i}_{int(start_time) if start_time else 0}"
-        
-        executions.append({
-            "id": execution_id,
-            "name": tool["name"],
-            "status": "completed",  # 履歴では常に完了済み
-            "output": tool.get("output", "")  # 実行結果（空文字列でもOK）
-        })
-    
+
+        executions.append(
+            {
+                "id": execution_id,
+                "name": tool["name"],
+                "status": "completed",  # 履歴では常に完了済み
+                "output": tool.get("output", ""),  # 実行結果（空文字列でもOK）
+            }
+        )
+
     return executions if executions else None
 
 
@@ -587,18 +598,24 @@ async def stream_chat(
                             if isinstance(event.data.item, ResponseFunctionToolCall):
                                 tool_name = event.data.item.name
                                 call_id = event.data.item.call_id
-                                
+
                                 # 🛡️ エラーハンドリング: 空文字列チェック
                                 if not tool_name:
-                                    print("⚠️ Warning: tool_name is empty for ResponseFunctionToolCall (streaming in progress)")
+                                    print(
+                                        "⚠️ Warning: tool_name is empty for ResponseFunctionToolCall (streaming in progress)"
+                                    )
                                     continue  # 空の場合はスキップ、後続チャンクを待つ
-                                
+
                                 if not call_id:
-                                    print("⚠️ Warning: call_id is empty for ResponseFunctionToolCall (streaming in progress)")
+                                    print(
+                                        "⚠️ Warning: call_id is empty for ResponseFunctionToolCall (streaming in progress)"
+                                    )
                                     continue  # 空の場合はスキップ、後続チャンクを待つ
-                                
-                                print(f"🚀 LLM decided to use tool: {tool_name} (ID: {call_id})")
-                                
+
+                                print(
+                                    f"🚀 LLM decided to use tool: {tool_name} (ID: {call_id})"
+                                )
+
                                 # 即座にtool_decisionイベントを送信
                                 tool_decision_event = SSEEvent(
                                     type="tool_decision",
@@ -606,20 +623,24 @@ async def stream_chat(
                                     tool_name=tool_name,
                                     execution_id=call_id,
                                 )
-                                print(f"Sending tool_decision event: {tool_decision_event.model_dump_json()}")
+                                print(
+                                    f"Sending tool_decision event: {tool_decision_event.model_dump_json()}"
+                                )
                                 yield f"data: {tool_decision_event.model_dump_json()}\n\n"
-                        
+
                         # ✅ Phase 3実装: 型チェックによる完全分離（フィルタリング不要）
                         elif isinstance(event.data, ResponseTextDeltaEvent):
                             content = event.data.delta  # 純粋なAI応答のみ
                             assistant_content += content
-                            
+
                             # コンテンツストリーミング
                             content_event = SSEEvent(
                                 type="content", content=content, message_id=assistant_id
                             )
                             yield f"data: {content_event.model_dump_json()}\n\n"
-                        elif isinstance(event.data, ResponseFunctionCallArgumentsDeltaEvent):
+                        elif isinstance(
+                            event.data, ResponseFunctionCallArgumentsDeltaEvent
+                        ):
                             # ツール引数は完全に無視（デバッグ用ログのみ）
                             print(f"Tool arguments ignored: {event.data.delta}")
 

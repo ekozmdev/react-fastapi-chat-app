@@ -27,6 +27,7 @@ class Conversation(Base):
         cascade="all, delete-orphan",
     )
 
+
 class Message(Base):
     __tablename__ = "messages"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -34,19 +35,19 @@ class Message(Base):
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    
+
     # Phase 1で追加：ツール実行メタデータ（保持）
     tool_metadata = Column(JSON, nullable=True)
-    
+
     # Phase 2で追加：詳細追跡の有無
     has_detailed_executions = Column(Boolean, default=False)
 
     # リレーション
-    conversation = relationship("Conversation", back_populates="messages")  
+    conversation = relationship("Conversation", back_populates="messages")
     # Phase 2で追加：詳細なツール実行記録
     tool_executions = relationship(
-        "ToolExecution", 
+        "ToolExecution",
         back_populates="message",
         order_by="ToolExecution.execution_order",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
