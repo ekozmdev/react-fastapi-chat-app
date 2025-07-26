@@ -175,6 +175,7 @@ body {
 
 .sidebar.collapsed {
   width: 48px; /* 36px → 48px に拡張して左右余白を確保 */
+  padding: 6px; /* 閉じた時は padding を小さく */
 }
 
 /* サイドバートグルボタン */
@@ -343,9 +344,6 @@ body {
 .new-chat-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 12px;
   background-color: #ffffff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -354,6 +352,21 @@ body {
   color: #333;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+/* Phase 8: 展開時のスタイル */
+.new-chat-btn.expanded {
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+}
+
+/* Phase 8: 閉じた時の専用スタイル */
+.new-chat-btn.collapsed {
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  margin: 4px auto;
 }
 
 .new-chat-btn:hover {
