@@ -20,7 +20,7 @@ const LoginForm: React.FC = () => {
       if (!success) {
         setError('メールアドレスまたはパスワードが正しくありません');
       }
-    } catch (error) {
+    } catch (_error) {
       setError('ログインに失敗しました。再度お試しください。');
     } finally {
       setIsLoading(false);
@@ -38,7 +38,14 @@ const LoginForm: React.FC = () => {
         <form onSubmit={handleSubmit} className="login-form">
           {error && (
             <div className="error-message">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-label="エラー"
+                role="img"
+              >
                 <path d="M8 1L15 15H1L8 1Z" stroke="currentColor" strokeWidth="1.5" fill="none" />
                 <path d="M8 6V10" stroke="currentColor" strokeWidth="1.5" />
                 <circle cx="8" cy="12" r="0.5" fill="currentColor" />

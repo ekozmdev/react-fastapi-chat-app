@@ -159,13 +159,76 @@ body {
 
 /* サイドバー */
 .sidebar {
-  width: 260px;
   background-color: #f3f3f3;
   border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
   padding: 12px;
   gap: 12px;
+  transition: width 0.3s ease-in-out;
+  overflow: hidden; /* コンテンツはみ出し防止 */
+}
+
+.sidebar.expanded {
+  width: 260px;
+}
+
+.sidebar.collapsed {
+  width: 48px; /* 36px → 48px に拡張して左右余白を確保 */
+  padding: 6px; /* 閉じた時は padding を小さく */
+}
+
+/* サイドバートグルボタン */
+.sidebar-toggle {
+  display: flex;
+  padding: 4px;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+}
+
+/* 展開時: ボタンを右側に配置 */
+.sidebar.expanded .sidebar-toggle {
+  justify-content: flex-end;
+}
+
+/* 収納時: ボタンを中央に配置 */
+.sidebar.collapsed .sidebar-toggle {
+  justify-content: center;
+}
+
+.sidebar-toggle button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #666;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.sidebar-toggle button:hover {
+  background-color: #e5e5e5;
+  color: #333;
+}
+
+.sidebar-toggle button:active {
+  transform: scale(0.95);
+}
+
+/* サイドバーコンテンツ */
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0; /* テキスト省略対応 */
+  flex: 1;
 }
 
 /* ユーザー情報 */
@@ -177,7 +240,8 @@ body {
   background-color: #ffffff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  margin-bottom: 8px;
+  margin-top: auto;    /* 下部固定の核心 */
+  margin-bottom: 0;    /* 不要な下余白を除去 */
 }
 
 .user-avatar {
@@ -280,9 +344,6 @@ body {
 .new-chat-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 12px;
   background-color: #ffffff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -291,6 +352,21 @@ body {
   color: #333;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+/* Phase 8: 展開時のスタイル */
+.new-chat-btn.expanded {
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+}
+
+/* Phase 8: 閉じた時の専用スタイル */
+.new-chat-btn.collapsed {
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  margin: 4px auto;
 }
 
 .new-chat-btn:hover {
@@ -453,6 +529,24 @@ body {
   background-color: #f3f3f3;
   color: #666;
   border: 1px solid #e0e0e0;
+}
+
+/* ストリーミング中のスピナー */
+.streaming-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* メッセージ下部のスピナーコンテナ */
+.message-spinner {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 8px;
+  margin-top: 4px;
 }
 
 .message-content {
@@ -643,17 +737,106 @@ body {
   font-size: 11px;
 }
 
-/* レスポンシブデザイン */
+/* ツール実行表示 */
+.tool-executions {
+  margin-bottom: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #fafafa;
+  overflow: hidden;
+}
+
+.tool-execution {
+  border-bottom: 1px solid #e0e0e0;
+  padding: 8px 12px;
+  transition: background-color 0.2s ease;
+}
+
+.tool-execution:last-child {
+  border-bottom: none;
+}
+
+.tool-execution.executing {
+  background-color: #fff7ed;
+}
+
+.tool-execution.completed {
+  background-color: #f0fdf4;
+}
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.tool-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #f59e0b;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.tool-name {
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+}
+
+.tool-status-text {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.tool-execution.executing .tool-status-text {
+  color: #d97706;
+}
+
+.tool-execution.completed .tool-status-text {
+  color: #059669;
+}
+
+.tool-output {
+  padding: 6px 8px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+  margin-top: 4px;
+}
+
+/* レスポンシブ対応: 768px制限を撤廃してトグル式サイドバーに統一 */
 @media (max-width: 768px) {
-  .sidebar {
-    display: none;
-  }
-  
   .messages {
     padding: 0 16px;
   }
   
   .input-container {
     padding: 12px 16px;
+  }
+  
+  .tool-executions {
+    margin-bottom: 8px;
+  }
+  
+  .tool-execution {
+    padding: 6px 10px;
+  }
+  
+  .tool-header {
+    font-size: 12px;
   }
 }

@@ -1,30 +1,39 @@
 import os
+import time
 import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 import uvicorn
 from agents import Agent, ModelSettings, Runner
+from agents.stream_events import RawResponsesStreamEvent
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from fastapi.security import HTTPAuthorizationCredentials
 from openai import AsyncOpenAI
-from passlib.context import CryptContext
-from pydantic import BaseModel
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    String,
-    Text,
-    create_engine,
+from openai.types.responses import (
+    ResponseFunctionCallArgumentsDeltaEvent,
+    ResponseFunctionToolCall,
+    ResponseOutputItemAddedEvent,
+    ResponseTextDeltaEvent,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, relationship, sessionmaker
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from .auth import (
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
+    authenticate_user,
+    create_access_token,
+    get_password_hash,
+    security,
+    verify_password,
+    verify_token,
+)
+from .database import get_db
+from .models import Conversation, Message, User
+from .tools import AVAILABLE_TOOLS
 
 load_dotenv()
 
@@ -38,135 +47,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
-)
-# psycopg3 (psycopg) uses 'postgresql+psycopg' dialect
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Agents SDK設定
+# Agents SDK設定（Phase 1でツール機能を追加）
 chat_agent = Agent(
     name="ChatAssistant",
-    instructions="You are a helpful assistant. Please respond in the same language as the user's input.",
+    instructions="""あなたは親切で知識豊富なアシスタントです。
+    ユーザーの質問に正確かつ丁寧に答えてください。
+    必要に応じてツールを使用してください。
+    時刻の取得や計算が必要な場合は、適切なツールを使用してください。
+    回答は常にユーザーの言語で行ってください。""",
     model="gpt-4o",
     model_settings=ModelSettings(
         max_tokens=1024,
         temperature=0.7,
     ),
+    tools=AVAILABLE_TOOLS,  # tools.pyで定義されたツールを自動で利用
 )
-
-# JWT設定
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
-)
-
-# パスワードハッシュ化（bcrypt使用）
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# JWT認証
-security = HTTPBearer()
-
-
-# ---------- DB Models ----------
-class User(Base):
-    __tablename__ = "users"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String, unique=True, nullable=False, index=True)
-    username = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at = Column(
-        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
-    )
-
-    # リレーション
-    conversations = relationship("Conversation", back_populates="user")
-
-
-class Conversation(Base):
-    __tablename__ = "conversations"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    title = Column(String, nullable=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at = Column(
-        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
-    )
-
-    # リレーション
-    user = relationship("User", back_populates="conversations")
-    messages = relationship(
-        "Message",
-        back_populates="conversation",
-        order_by="Message.created_at",
-        cascade="all, delete-orphan",
-    )
-
-
-class Message(Base):
-    __tablename__ = "messages"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False)
-    role = Column(String, nullable=False)
-    content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    conversation = relationship("Conversation", back_populates="messages")
-
-
-# Base.metadata.create_all(bind=engine)  # Alembicでマイグレーション管理するため無効化
-
-
-# ---------- 認証ヘルパー関数 ----------
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """パスワードを検証"""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    """パスワードをハッシュ化"""
-    return pwd_context.hash(password)
-
-
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """JWTアクセストークンを作成"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
-    else:
-        expire = datetime.now(UTC) + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    return encoded_jwt
-
-
-def verify_token(token: str) -> str | None:
-    """JWTトークンを検証してuser_idを返す"""
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            return None
-        return user_id
-    except JWTError:
-        return None
-
-
-def authenticate_user(db: Session, email: str, password: str) -> User | None:
-    """ユーザー認証"""
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        return None
-    if not verify_password(password, user.password_hash):
-        return None
-    return user
 
 
 # ---------- Pydantic ----------
@@ -177,13 +75,74 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = None
 
 
+# Phase 1: ツール実行追跡クラス
+class ToolExecutionTracker:
+    """ツール実行の追跡とメタデータ生成を管理"""
+
+    def __init__(self):
+        self.tools_used: list[dict[str, Any]] = []
+        self.current_tool: dict[str, Any] | None = None
+
+    def start_tool(self, tool_name: str, arguments: dict[str, Any]) -> None:
+        """ツール実行開始"""
+        self.current_tool = {
+            "name": tool_name,
+            "input": arguments,
+            "start_time": time.time() * 1000,  # ミリ秒
+            "status": "executing",
+        }
+
+    def complete_tool(self, output: str = None, error: str = None) -> None:
+        """ツール実行完了"""
+        if self.current_tool:
+            execution_time = int(time.time() * 1000 - self.current_tool["start_time"])
+            self.current_tool.update(
+                {
+                    "output": output,
+                    "error": error,
+                    "status": "success" if not error else "error",
+                    "execution_time_ms": execution_time,
+                }
+            )
+            self.tools_used.append(self.current_tool)
+            self.current_tool = None
+
+    def get_metadata(self) -> dict[str, Any] | None:
+        """tool_metadataを生成"""
+        if not self.tools_used:
+            return None
+
+        success_count = sum(1 for t in self.tools_used if t["status"] == "success")
+        error_count = len(self.tools_used) - success_count
+        total_time = sum(t["execution_time_ms"] for t in self.tools_used)
+
+        return {
+            "tools_used": self.tools_used,
+            "summary": {
+                "total_tools": len(self.tools_used),
+                "total_time_ms": total_time,
+                "success_count": success_count,
+                "error_count": error_count,
+            },
+        }
+
+
 class SSEEvent(BaseModel):
-    type: Literal["status", "content", "done", "error"]
+    type: Literal[
+        "status",
+        "content",
+        "done",
+        "error",
+        "tool_start",
+        "tool_complete",
+        "tool_decision",
+    ]
     message: str | None = None
     content: str | None = None
     message_id: str | None = None
     tool_name: str | None = None
-    step: str | None = None
+    tool_output: str | None = None
+    execution_id: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -212,14 +171,6 @@ class UserUpdateRequest(BaseModel):
 
 
 # ---------- Dependency ----------
-def get_db() -> Session:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
@@ -424,6 +375,48 @@ async def list_conversations(
     }
 
 
+# Phase 7: tool_metadata → toolExecutions 変換関数
+def convert_tool_metadata_to_executions(
+    tool_metadata: dict[str, Any] | None,
+) -> list[dict[str, Any]] | None:
+    """
+    Phase 1で保存されたtool_metadataをフロントエンド期待形式のtoolExecutionsに変換
+
+    Args:
+        tool_metadata: Phase 1で保存されたツール実行メタデータ
+
+    Returns:
+        フロントエンド用のtoolExecutions配列、または None（ツール実行なしの場合）
+    """
+    if not tool_metadata or not isinstance(tool_metadata, dict):
+        return None
+
+    tools_used = tool_metadata.get("tools_used")
+    if not tools_used or not isinstance(tools_used, list):
+        return None
+
+    executions = []
+    for i, tool in enumerate(tools_used):
+        # 必要なフィールドの存在確認
+        if not isinstance(tool, dict) or "name" not in tool:
+            continue
+
+        # 一意IDの生成（name + index + start_time）
+        start_time = tool.get("start_time", 0)
+        execution_id = f"{tool['name']}_{i}_{int(start_time) if start_time else 0}"
+
+        executions.append(
+            {
+                "id": execution_id,
+                "name": tool["name"],
+                "status": "completed",  # 履歴では常に完了済み
+                "output": tool.get("output", ""),  # 実行結果（空文字列でもOK）
+            }
+        )
+
+    return executions if executions else None
+
+
 @app.get("/api/conversations/{conversation_id}")
 async def get_conversation(
     conversation_id: str,
@@ -452,6 +445,7 @@ async def get_conversation(
                 "role": m.role,
                 "content": m.content,
                 "timestamp": m.created_at,
+                "toolExecutions": convert_tool_metadata_to_executions(m.tool_metadata),
             }
             for m in conv.messages
         ],
@@ -520,40 +514,145 @@ async def stream_chat(
             # ストリーミング開始
             assistant_content = ""
             assistant_id = str(uuid.uuid4())
+            tool_tracker = ToolExecutionTracker()  # Phase 1: ツール追跡開始
 
             # Agents SDK でストリーミング実行
             result = Runner.run_streamed(chat_agent, api_messages)
 
             async for event in result.stream_events():
-                if event.type == "raw_response_event":
-                    # delta の存在と内容を慎重にチェック
-                    if (
-                        hasattr(event, "data")
-                        and hasattr(event.data, "delta")
-                        and event.data.delta is not None
-                        and isinstance(event.data.delta, str)
-                    ):
-                        content = str(event.data.delta)
-                        assistant_content += content
-
-                        # コンテンツストリーミング
-                        content_event = SSEEvent(
-                            type="content", content=content, message_id=assistant_id
+                # Phase 1: ツール実行イベントの処理
+                if hasattr(event, "item") and hasattr(event.item, "type"):
+                    if event.item.type == "tool_call_item":
+                        # ツール呼び出し開始
+                        # raw_itemから正確な情報を取得
+                        raw_item = event.item.raw_item
+                        tool_name = (
+                            raw_item.get("name")
+                            if hasattr(raw_item, "get")
+                            else getattr(raw_item, "name", "unknown")
                         )
-                        yield f"data: {content_event.model_dump_json()}\n\n"
-                    else:
-                        # デバッグ用: 予期しない形式をログ出力
+                        arguments = (
+                            raw_item.get("arguments", {})
+                            if hasattr(raw_item, "get")
+                            else getattr(raw_item, "arguments", {})
+                        )
+                        call_id = getattr(
+                            event.item, "id", f"call_{int(time.time() * 1000)}"
+                        )
+
                         print(
-                            f"Unexpected event.data format: {type(event.data)}, {event.data}"
+                            f"Tool call started: name={tool_name}, call_id={call_id}, args={arguments}"
                         )
 
-            # アシスタントメッセージを保存
+                        tool_tracker.start_tool(tool_name, arguments)
+
+                        # フロントエンドにツール開始イベントを送信
+                        tool_start_event = SSEEvent(
+                            type="tool_start",
+                            message_id=assistant_id,
+                            tool_name=tool_name,
+                            execution_id=call_id,
+                        )
+                        print(
+                            f"Sending tool_start event: {tool_start_event.model_dump_json()}"
+                        )
+                        yield f"data: {tool_start_event.model_dump_json()}\n\n"
+
+                    elif event.item.type == "tool_call_output_item":
+                        # ツール実行完了
+                        output = getattr(event.item, "output", "")
+                        error = getattr(event.item, "error", None)
+                        call_id = getattr(event.item, "tool_call_id", "unknown_call")
+
+                        # 前回開始したツールの名前を使用
+                        tool_name = (
+                            tool_tracker.current_tool["name"]
+                            if tool_tracker.current_tool
+                            else "unknown"
+                        )
+
+                        print(
+                            f"Tool call completed: call_id={call_id}, output={output}"
+                        )
+
+                        tool_tracker.complete_tool(output=output, error=error)
+
+                        # フロントエンドにツール完了イベントを送信
+                        tool_complete_event = SSEEvent(
+                            type="tool_complete",
+                            message_id=assistant_id,
+                            tool_name=tool_name,
+                            tool_output=output,
+                            execution_id=call_id,
+                        )
+                        print(
+                            f"Sending tool_complete event: {tool_complete_event.model_dump_json()}"
+                        )
+                        yield f"data: {tool_complete_event.model_dump_json()}\n\n"
+
+                elif event.type == "raw_response_event":
+                    # RawResponsesStreamEventかどうかをまず確認
+                    if isinstance(event, RawResponsesStreamEvent):
+                        # 🆕 Phase 4.2: ツール決定の即座検出（実行前！）
+                        if isinstance(event.data, ResponseOutputItemAddedEvent):
+                            if isinstance(event.data.item, ResponseFunctionToolCall):
+                                tool_name = event.data.item.name
+                                call_id = event.data.item.call_id
+
+                                # 🛡️ エラーハンドリング: 空文字列チェック
+                                if not tool_name:
+                                    print(
+                                        "⚠️ Warning: tool_name is empty for ResponseFunctionToolCall (streaming in progress)"
+                                    )
+                                    continue  # 空の場合はスキップ、後続チャンクを待つ
+
+                                if not call_id:
+                                    print(
+                                        "⚠️ Warning: call_id is empty for ResponseFunctionToolCall (streaming in progress)"
+                                    )
+                                    continue  # 空の場合はスキップ、後続チャンクを待つ
+
+                                print(
+                                    f"🚀 LLM decided to use tool: {tool_name} (ID: {call_id})"
+                                )
+
+                                # 即座にtool_decisionイベントを送信
+                                tool_decision_event = SSEEvent(
+                                    type="tool_decision",
+                                    message_id=assistant_id,
+                                    tool_name=tool_name,
+                                    execution_id=call_id,
+                                )
+                                print(
+                                    f"Sending tool_decision event: {tool_decision_event.model_dump_json()}"
+                                )
+                                yield f"data: {tool_decision_event.model_dump_json()}\n\n"
+
+                        # ✅ Phase 3実装: 型チェックによる完全分離（フィルタリング不要）
+                        elif isinstance(event.data, ResponseTextDeltaEvent):
+                            content = event.data.delta  # 純粋なAI応答のみ
+                            assistant_content += content
+
+                            # コンテンツストリーミング
+                            content_event = SSEEvent(
+                                type="content", content=content, message_id=assistant_id
+                            )
+                            yield f"data: {content_event.model_dump_json()}\n\n"
+                        elif isinstance(
+                            event.data, ResponseFunctionCallArgumentsDeltaEvent
+                        ):
+                            # ツール引数は完全に無視（デバッグ用ログのみ）
+                            print(f"Tool arguments ignored: {event.data.delta}")
+
+            # Phase 1: ツールメタデータを含めてアシスタントメッセージを保存
+            tool_metadata = tool_tracker.get_metadata()
             db.add(
                 Message(
                     id=assistant_id,
                     conversation_id=conv.id,
                     role="assistant",
                     content=assistant_content,
+                    tool_metadata=tool_metadata,
                 )
             )
 

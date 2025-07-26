@@ -1,5 +1,5 @@
 import type React from 'react';
-import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 // 型定義
 interface User {
@@ -37,7 +37,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
 
   // トークンからユーザー情報を取得
-  const fetchUserInfo = async (token: string): Promise<User | null> => {
+  const fetchUserInfo = useCallback(async (token: string): Promise<User | null> => {
     try {
       const response = await fetch('/api/auth/me', {
         headers: {
@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.removeItem('auth_token');
       return null;
     }
-  };
+  }, []);
 
   // 初期化時の認証チェック
   useEffect(() => {
@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     initAuth();
-  }, []);
+  }, [fetchUserInfo]);
 
   // ログイン
   const login = async (email: string, password: string): Promise<boolean> => {

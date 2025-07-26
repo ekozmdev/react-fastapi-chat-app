@@ -20,12 +20,21 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  toolExecutions?: ToolExecution[];
+}
+
+interface ToolExecution {
+  id: string;
+  name: string;
+  status: 'executing' | 'completed';
+  output?: string;
 }
 
 interface StreamingMessage {
   id: string;
   content: string;
   isStreaming: boolean;
+  toolExecutions: ToolExecution[];
 }
 
 interface Conversation {
@@ -51,6 +60,7 @@ const ChatApp: React.FC = () => {
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -148,9 +158,124 @@ const ChatApp: React.FC = () => {
                 try {
                   const data = JSON.parse(line.slice(6));
 
+                  // デバッグ用：受信したSSEイベントをログ出力（簡潔化）
+                  if (data.type === 'tool_start' || data.type === 'tool_complete') {
+                    console.log(
+                      `SSE: ${data.type} - ${data.tool_name}`,
+                      data.tool_output ? `-> ${data.tool_output.substring(0, 30)}...` : ''
+                    );
+                  }
+
                   switch (data.type) {
                     case 'status':
                       // ステータスは表示しない
+                      break;
+                    case 'tool_decision':
+                      // 🆕 Phase 4.2: LLM決定時点でスピナー即座表示開始
+                      console.log(`🚀 Tool decision detected: ${data.tool_name}`);
+                      setStreamingMessage((prev) => {
+                        const executionId = data.execution_id || `${data.tool_name}_${Date.now()}`;
+
+                        // 🛡️ 双方向重複チェック: tool_startで既にエントリが存在するかチェック
+                        const existingExecution = prev?.toolExecutions.find(
+                          (exec) =>
+                            exec.id === executionId ||
+                            exec.name === data.tool_name ||
+                            (data.execution_id && exec.id === data.execution_id)
+                        );
+
+                        if (existingExecution) {
+                          // 既にtool_startで作成済み → スキップ
+                          console.log(
+                            `⚠️ Tool execution already exists for ${data.tool_name}, skipping tool_decision`
+                          );
+                          return prev;
+                        }
+
+                        const newExecution: ToolExecution = {
+                          id: executionId,
+                          name: data.tool_name,
+                          status: 'executing',
+                        };
+
+                        if (!prev) {
+                          // ストリーミングメッセージがまだない場合は作成
+                          return {
+                            id: data.message_id,
+                            content: '',
+                            isStreaming: true,
+                            toolExecutions: [newExecution],
+                          };
+                        }
+
+                        return {
+                          ...prev,
+                          toolExecutions: [...prev.toolExecutions, newExecution],
+                        };
+                      });
+                      break;
+                    case 'tool_start':
+                      // ✅ 双方向重複チェック: tool_decisionで既にエントリが存在するかチェック
+                      setStreamingMessage((prev) => {
+                        const executionId = data.execution_id || `${data.tool_name}_${Date.now()}`;
+
+                        // 🛡️ 強化された重複チェック: より正確なID照合
+                        const existingExecution = prev?.toolExecutions.find(
+                          (exec) =>
+                            exec.id === executionId ||
+                            exec.name === data.tool_name ||
+                            (data.execution_id && exec.id === data.execution_id)
+                        );
+
+                        if (existingExecution) {
+                          // 既にtool_decisionで作成済み → スキップ
+                          console.log(
+                            `⚠️ Tool execution already exists for ${data.tool_name}, skipping tool_start`
+                          );
+                          return prev;
+                        }
+
+                        // 新規ツール実行の場合のみ作成
+                        const newExecution: ToolExecution = {
+                          id: executionId,
+                          name: data.tool_name,
+                          status: 'executing',
+                        };
+
+                        if (!prev) {
+                          // ストリーミングメッセージがまだない場合は作成
+                          return {
+                            id: data.message_id,
+                            content: '',
+                            isStreaming: true,
+                            toolExecutions: [newExecution],
+                          };
+                        }
+
+                        return {
+                          ...prev,
+                          toolExecutions: [...prev.toolExecutions, newExecution],
+                        };
+                      });
+                      break;
+                    case 'tool_complete':
+                      // ツール実行完了：結果を表示
+                      setStreamingMessage((prev) => {
+                        if (!prev) return prev;
+
+                        return {
+                          ...prev,
+                          toolExecutions: prev.toolExecutions.map((exec) =>
+                            exec.name === data.tool_name
+                              ? {
+                                  ...exec,
+                                  status: 'completed',
+                                  output: data.tool_output || '',
+                                }
+                              : exec
+                          ),
+                        };
+                      });
                       break;
                     case 'content':
                       setStreamingMessage((prev) => {
@@ -160,6 +285,7 @@ const ChatApp: React.FC = () => {
                             id: data.message_id,
                             content: data.content,
                             isStreaming: true,
+                            toolExecutions: [],
                           };
                         }
                         return {
@@ -178,6 +304,7 @@ const ChatApp: React.FC = () => {
                               role: 'assistant',
                               content: prev.content,
                               timestamp: new Date().toISOString(),
+                              toolExecutions: prev.toolExecutions, // ツール実行情報も保存
                             },
                           ]);
                         }
@@ -259,10 +386,7 @@ const ChatApp: React.FC = () => {
     };
   }, []);
 
-  useEffect(
-    () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }),
-    [messages, streamingMessage]
-  );
+  useEffect(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), []);
 
   /* ----------------------- handlers --------------------------- */
   const handleNewChat = () => {
@@ -357,7 +481,9 @@ const ChatApp: React.FC = () => {
       }
 
       // SSEストリーミング開始
-      await startSSEStream(convId!, messageContent);
+      if (convId) {
+        await startSSEStream(convId, messageContent);
+      }
     } catch (err) {
       console.error('Error sending message:', err);
       setIsLoading(false);
@@ -384,7 +510,7 @@ const ChatApp: React.FC = () => {
     textarea.style.height = 'auto';
     // 1行約24px（line-height 1.6 × font-size 15px）× 10行 = 240px
     const maxHeight = 24 * 10;
-    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -409,74 +535,181 @@ const ChatApp: React.FC = () => {
     return date.toLocaleDateString('ja-JP');
   };
 
+  // ツール実行情報表示コンポーネント
+  const renderToolExecutions = (toolExecutions: ToolExecution[]) => (
+    <div className="tool-executions">
+      {toolExecutions.map((tool) => (
+        <div key={tool.id} className={`tool-execution ${tool.status}`}>
+          <div className="tool-header">
+            <div className="tool-icon">
+              {tool.status === 'executing' && <div className="tool-spinner"></div>}
+              {tool.status === 'completed' && (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  aria-label="完了"
+                  role="img"
+                >
+                  <path
+                    d="M3 7L6 10L11 4"
+                    stroke="#10b981"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </div>
+            <span className="tool-name">{tool.name}</span>
+            <span className="tool-status-text">
+              {tool.status === 'executing' && '実行中...'}
+              {tool.status === 'completed' && '完了'}
+            </span>
+          </div>
+          {tool.output && tool.status === 'completed' && (
+            <div className="tool-output">{tool.output}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
   /* ----------------------- render ----------------------------- */
   return (
     <div className="app">
       {/* ------------- sidebar ------------- */}
-      <div className="sidebar">
-        <div className="user-info">
-          <div className="user-avatar">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M5 18c0-4 2.5-7 5-7s5 3 5 7" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          </div>
-          <div className="user-details">
-            <div className="username">{user?.username}</div>
-            <div className="user-email">{user?.email}</div>
-          </div>
-          <button className="logout-btn" onClick={logout} title="ログアウト">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M6 16L1 16L1 0L6 0" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M11 12L15 8L11 4" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M15 8L6 8" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
+      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}>
+        <div className="sidebar-toggle">
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={sidebarCollapsed ? 'サイドバーを開く' : 'サイドバーを閉じる'}
+            aria-label={sidebarCollapsed ? 'サイドバーを開く' : 'サイドバーを閉じる'}
+          >
+            {sidebarCollapsed ? '>' : '<'}
           </button>
         </div>
 
-        <button className="new-chat-btn" onClick={handleNewChat}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        {/* Phase 8: サイドバー展開時・閉じた時両方で新しいチャットボタン表示 */}
+        <button
+          type="button"
+          className={`new-chat-btn ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}
+          onClick={handleNewChat}
+          title={sidebarCollapsed ? '新しいチャット' : undefined}
+          aria-label="新しいチャット"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-label="新しいチャット"
+            role="img"
+          >
             <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          新しいチャット
+          {!sidebarCollapsed && <span>新しいチャット</span>}
         </button>
 
-        <div className="chat-history">
-          {conversations.map((conv) => (
-            <div
-              key={conv.id}
-              className={`chat-item ${conversationId === conv.id ? 'active' : ''}`}
-              onClick={() => handleSelectConversation(conv)}
-            >
-              <div className="chat-item-content">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path
-                    d="M2 5L8 2L14 5V10C14 12.21 12.21 14 10 14H6C3.79 14 2 12.21 2 10V5Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  />
-                </svg>
-                <span className="chat-item-title">{conv.title || '新しいチャット'}</span>
-              </div>
-              <div className="chat-item-meta">
-                <span className="chat-item-date">{formatDate(conv.updated_at)}</span>
-                <button
-                  className="chat-item-delete"
-                  onClick={(e) => handleDeleteConversation(conv.id, e)}
+        {!sidebarCollapsed && (
+          <div className="sidebar-content">
+            <div className="chat-history">
+              {conversations.map((conv) => (
+                // biome-ignore lint/a11y/useSemanticElements: Div is needed for CSS layout reasons
+                <div
+                  key={conv.id}
+                  className={`chat-item ${conversationId === conv.id ? 'active' : ''}`}
+                  onClick={() => handleSelectConversation(conv)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleSelectConversation(conv);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path
-                      d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-              </div>
+                  <div className="chat-item-content">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      aria-label="チャット"
+                      role="img"
+                    >
+                      <path
+                        d="M2 5L8 2L14 5V10C14 12.21 12.21 14 10 14H6C3.79 14 2 12.21 2 10V5Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+                    <span className="chat-item-title">{conv.title || '新しいチャット'}</span>
+                  </div>
+                  <div className="chat-item-meta">
+                    <span className="chat-item-date">{formatDate(conv.updated_at)}</span>
+                    <button
+                      type="button"
+                      className="chat-item-delete"
+                      onClick={(e) => handleDeleteConversation(conv.id, e)}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 14 14"
+                        fill="none"
+                        aria-label="削除"
+                        role="img"
+                      >
+                        <path
+                          d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+
+            <div className="user-info">
+              <div className="user-avatar">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-label="ユーザー"
+                  role="img"
+                >
+                  <circle cx="10" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M5 18c0-4 2.5-7 5-7s5 3 5 7" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+              </div>
+              <div className="user-details">
+                <div className="username">{user?.username}</div>
+                <div className="user-email">{user?.email}</div>
+              </div>
+              <button type="button" className="logout-btn" onClick={logout} title="ログアウト">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-label="ログアウト"
+                  role="img"
+                >
+                  <path d="M6 16L1 16L1 0L6 0" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M11 12L15 8L11 4" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M15 8L6 8" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ------------- main ------------- */}
@@ -496,30 +729,52 @@ const ChatApp: React.FC = () => {
                 <span>メッセージを読み込み中...</span>
               </div>
             )}
-            {messages &&
-              messages.map((msg) => (
-                <div key={msg.id} className={`message ${msg.role}`}>
-                  <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
-                  <div className="message-content">
-                    <div className="message-text">
-                      {msg.role === 'assistant' ? (
-                        <MarkdownRenderer content={msg.content} />
-                      ) : (
-                        msg.content
-                      )}
-                    </div>
-                    <div className="message-time">{formatTime(msg.timestamp)}</div>
+            {messages?.map((msg) => (
+              <div key={msg.id} className={`message ${msg.role}`}>
+                <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
+                <div className="message-content">
+                  {/* ツール実行情報表示 */}
+                  {msg.role === 'assistant' &&
+                    msg.toolExecutions &&
+                    msg.toolExecutions.length > 0 &&
+                    renderToolExecutions(msg.toolExecutions)}
+                  <div className="message-text">
+                    {msg.role === 'assistant' ? (
+                      <MarkdownRenderer content={msg.content} />
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
+                  <div className="message-time">{formatTime(msg.timestamp)}</div>
+                </div>
+              </div>
+            ))}
+
+            {/* ローディング中の表示（ユーザー送信直後から表示） */}
+            {isLoading && !streamingMessage && (
+              <div className="message assistant">
+                <div className="message-avatar">AI</div>
+                <div className="message-content">
+                  <div className="message-spinner">
+                    <div className="streaming-spinner"></div>
                   </div>
                 </div>
-              ))}
+              </div>
+            )}
 
             {streamingMessage && (
               <div className="message assistant">
                 <div className="message-avatar">AI</div>
                 <div className="message-content">
+                  {/* ツール実行情報表示 */}
+                  {streamingMessage.toolExecutions.length > 0 &&
+                    renderToolExecutions(streamingMessage.toolExecutions)}
                   <div className="message-text">
                     <MarkdownRenderer content={streamingMessage.content} />
-                    <span className="typing-indicator">▊</span>
+                    {streamingMessage.isStreaming &&
+                      streamingMessage.toolExecutions.every(
+                        (tool) => tool.status === 'completed'
+                      ) && <span className="typing-indicator">▊</span>}
                   </div>
                 </div>
               </div>
@@ -547,7 +802,14 @@ const ChatApp: React.FC = () => {
               className="send-button"
               disabled={!inputMessage.trim() || isLoading}
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                aria-label="送信"
+                role="img"
+              >
                 <path d="M2 10L18 2L14 18L10 11L2 10Z" fill="currentColor" />
               </svg>
             </button>

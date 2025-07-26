@@ -17,8 +17,10 @@ This is a React + FastAPI chat application with real-time Server-Sent Events (SS
 ### Frontend (in `/frontend/`)
 ```bash
 npm run dev          # Start Vite dev server on :3000
-npm run build        # Build for production (runs tsc + vite build)
-npm run lint         # ESLint with TypeScript support
+npm run build        # Build for production (runs tsc + vite build)  
+npm run lint         # Biome lint (DO NOT add options to package.json scripts)
+npm run format       # Biome format
+npm run check        # Biome check
 npm run preview      # Preview production build
 ```
 
@@ -47,8 +49,16 @@ docker-compose ps       # Check service status
   
 /backend/               # FastAPI application
   /app/                 # Application code
-    main.py             # FastAPI app with all routes and models
+    /models/            # SQLAlchemy database models
+      __init__.py       # Model imports for app-wide access
+      base.py           # SQLAlchemy Base declaration
+      user.py           # User model
+      conversation.py   # Conversation and Message models
+    auth.py             # JWT authentication and password handling
+    database.py         # Database connection and session management
+    main.py             # FastAPI app with routes and business logic
   /alembic/             # Database migrations
+  /scripts/             # Management scripts (user management, etc.)
   pyproject.toml        # uv dependencies and ruff configuration
   
 /nginx/                 # Nginx reverse proxy configuration
@@ -66,7 +76,8 @@ compose.yaml            # Docker Compose orchestration
 
 ### Database Schema
 - `conversations`: id (UUID), title, created_at, updated_at
-- `messages`: id (UUID), conversation_id (FK), role, content, created_at
+- `messages`: id (UUID), conversation_id (FK), role, content, created_at, tool_metadata (JSON), has_detailed_executions (Boolean)
+- `tool_executions`: id (UUID), message_id (FK), tool_name, tool_arguments (JSON), call_status, execution_status, tool_output, execution_time_ms, etc. (Phase 2)
 - Uses UUID primary keys and proper foreign key relationships
 
 ### Technology Migration Notes
@@ -77,6 +88,30 @@ compose.yaml            # Docker Compose orchestration
 - SSE provides foundation for future Function Calling/MCP tool status display
 - Agent-based architecture enables future multi-agent and tool integration features
 - All code should be written in Japanese documentation style (see existing files)
+
+### Tool Use Implementation (Phase 1, 2, 3, 4)
+- **Phase 1**: Basic tool functionality with minimal frontend changes
+  - Tools defined in `app/tools.py` with `@function_tool` decorator
+  - `AVAILABLE_TOOLS` list for easy extension
+  - `tool_metadata` JSON column in messages table for backward compatibility
+- **Phase 2**: Real-time tool execution visualization (COMPLETED)
+  - `ToolExecution` table for detailed execution tracking
+  - `ToolExecutionManager` class for database-connected tool lifecycle management
+  - Real-time SSE events: `tool_start`, `tool_complete` with execution details
+  - Frontend UI components for tool execution status display with spinners and success/error states
+  - Uses `RunItemStreamEvent` from openai-agents SDK for proper tool lifecycle tracking
+  - Both Phase 1 (tool_metadata) and Phase 2 (detailed executions) data are preserved
+- **Phase 3**: JSON引数混入問題の根本的解決 (COMPLETED)
+  - `ResponseTextDeltaEvent` vs `ResponseFunctionCallArgumentsDeltaEvent` 型分離実装
+  - AI応答とツール引数の完全分離によりクリーンな会話体験実現
+  - ポストプロセシングフィルタリング排除、SDK正式利用パターン採用
+- **Phase 4**: 真のリアルタイムツール検出実装 (COMPLETED)
+  - **Phase 4.1**: deepwiki公式確認による技術的実現可能性確定
+  - **Phase 4.2**: `ResponseOutputItemAddedEvent`による革新的実装
+    - LLM決定瞬間での即座スピナー表示（人工遅延完全排除）
+    - 双方向重複防止ロジックで順序不問対応
+    - 空文字列エラーハンドリング、全エッジケース対応
+    - `tool_decision` SSEイベント型追加で既存互換性100%維持
 
 ## Environment Setup
 
@@ -97,14 +132,45 @@ compose.yaml            # Docker Compose orchestration
 - SQLAlchemy 2.0 async patterns
 - FastAPI dependency injection for database sessions
 - Pydantic models for validation
+- File-type project structure: models/, auth.py, database.py separation
 
 ### TypeScript (Frontend)
 - Strict TypeScript configuration
-- ESLint with React hooks rules
+- Biome for linting and formatting
 - Minimal external dependencies (only React essentials)
 - Component-based architecture
+- **IMPORTANT**: DO NOT add command-line options to package.json scripts (禁止)
 
 ## Testing
 
 - Backend: pytest with asyncio support
 - Run tests with: `uv run pytest`
+
+## Development Lessons Learned (Phase 0-9実装エッセンス)
+
+### Architecture & Database Design Patterns
+- **Phase 0**: アーキテクチャ分離手法 - models/ディレクトリによるSQLAlchemyモデル分離、alembic依存関係管理の重要性
+- **Phase 1**: 段階的ツール導入 - @function_toolデコレータによる拡張可能設計、tool_metadata軽量データ保存アプローチ
+- **Phase 2**: 詳細実行追跡 - ToolExecutionManagerクラスによる2段階ステータス管理、マイグレーション・データベース設計のベストプラクティス
+
+### SDK Integration & Event Handling
+- **Phase 3**: openai-agents-python SDK正式活用 - ResponseTextDeltaEvent vs ResponseFunctionCallArgumentsDeltaEventの型分離、フィルタリング削除による根本的アーキテクチャ改善
+- **Phase 4**: 真のリアルタイム実装 - ResponseOutputItemAddedEventによる即座スピナー表示、双方向重複防止ロジック、deepwiki技術レビュー手法
+
+### UI/UX Design Patterns
+- **Phase 5**: ChatGPT風サイドバー設計 - `<`/`>`アイコンによる直感的トグルUI、CSS transition活用のスムーズアニメーション
+- **Phase 6**: Flexboxレイアウト最適化 - margin-top: autoによる下部固定配置テクニック、最小限CSS変更での効果的UI改善
+- **Phase 7**: データ永続化修復 - バックエンドAPIとフロントエンド期待値の不整合解決、convert_tool_metadata_to_executions変換パターン
+- **Phase 8**: コンパクトボタン設計 - CSS中央配置ベストプラクティス（margin: autoの活用）、段階的UI簡素化手法
+
+### Code Quality & Best Practices
+- **Phase 9**: 統合コード品質改善 - 
+  - フロントエンド: SVGアクセシビリティ対応（WCAG 2.1 AA準拠）、キーボードナビゲーション実装、TypeScript安全性向上（non-null assertion削除）
+  - バックエンド: 現代的型アノテーション（Dict→dict、List→list、Optional→T|None）、セキュリティ改善（eval→ast.literal_eval）、未使用インポート削除
+  - 自動化: Biome/Ruffによる統一コードフォーマット、適切なlint警告サプレス手法
+
+### Development Process Insights
+- **段階的実装の重要性**: 複雑機能を小さなPhaseに分割することで確実な進捗管理
+- **技術制約の早期把握**: 外部ライブラリ（openai-agents SDK）の制約を理解した設計変更
+- **ユーザビリティ重視**: 複雑な設計から実用的なシンプル設計への方向転換
+- **データ互換性確保**: Phase間でのデータ移行・変換パターンの確立
