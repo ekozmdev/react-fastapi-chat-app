@@ -33,6 +33,8 @@ uv run ruff format                                 # Format Python code
 uv run pytest                                      # Run tests
 ```
 
+**Note**: When testing or debugging backend changes, the user should start the server manually using the uvicorn command above. Claude should not attempt to start the server during development/testing sessions.
+
 ### Docker Environment
 ```bash
 docker-compose up -d    # Start all services (PostgreSQL, FastAPI, Nginx)

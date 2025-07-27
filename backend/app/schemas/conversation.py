@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 class ConversationResponse(BaseModel):
     """会話レスポンス"""
+
     id: str
     title: str | None = None
     created_at: datetime
@@ -17,6 +18,7 @@ class ConversationResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     """メッセージレスポンス"""
+
     id: str
     role: str
     content: str

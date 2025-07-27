@@ -7,15 +7,17 @@ from pydantic import BaseModel
 
 class ChatRequest(BaseModel):
     """チャットリクエスト"""
+
     message: str
     conversation_id: str | None = None
 
 
 class SSEEvent(BaseModel):
     """Server-Sent Eventデータ"""
+
     type: Literal[
         "status",
-        "content", 
+        "content",
         "done",
         "error",
         "tool_start",
