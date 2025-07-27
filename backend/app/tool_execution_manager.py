@@ -1,6 +1,6 @@
 """
-Phase 2: ツール実行の詳細管理
-Phase 1のToolExecutionTrackerを拡張したデータベース連携型管理システム
+Phase 2: データベース連携型ツール実行管理
+Phase 1のStreamToolTrackerを拡張したデータベース連携型管理システム
 """
 
 import logging
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class ToolExecutionManager:
+class DatabaseToolManager:
     """Phase 2: データベース連携型ツール実行管理"""
 
     def __init__(self, db: Session, message_id: str):

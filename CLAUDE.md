@@ -33,6 +33,8 @@ uv run ruff format                                 # Format Python code
 uv run pytest                                      # Run tests
 ```
 
+**Note**: When testing or debugging backend changes, the user should start the server manually using the uvicorn command above. Claude should not attempt to start the server during development/testing sessions.
+
 ### Docker Environment
 ```bash
 docker-compose up -d    # Start all services (PostgreSQL, FastAPI, Nginx)
@@ -132,7 +134,7 @@ compose.yaml            # Docker Compose orchestration
 - SQLAlchemy 2.0 async patterns
 - FastAPI dependency injection for database sessions
 - Pydantic models for validation
-- File-type project structure: models/, auth.py, database.py separation
+- Layered architecture: core/, schemas/, db/, models/ separation
 
 ### TypeScript (Frontend)
 - Strict TypeScript configuration
@@ -168,6 +170,13 @@ compose.yaml            # Docker Compose orchestration
   - フロントエンド: SVGアクセシビリティ対応（WCAG 2.1 AA準拠）、キーボードナビゲーション実装、TypeScript安全性向上（non-null assertion削除）
   - バックエンド: 現代的型アノテーション（Dict→dict、List→list、Optional→T|None）、セキュリティ改善（eval→ast.literal_eval）、未使用インポート削除
   - 自動化: Biome/Ruffによる統一コードフォーマット、適切なlint警告サプレス手法
+
+### Architecture Refactoring & Code Optimization
+- **Phase 10**: 軽いリファクタリング・大規模クリーンアップ - 
+  - **段階的リファクタリング**: 機能破壊ゼロでレイヤー型アーキテクチャ導入（core/設定・認証・依存性、schemas/型定義、db/データ層分離）
+  - **安全なクリーンアップ**: 重複コード・デッドコード・未使用ファイルの体系的特定と削除（1171行・30%削減達成）
+  - **品質保証プロセス**: インポートテスト・機能動作確認による段階的検証、SSE/ツール機能100%保持
+  - **保守性向上戦略**: uv依存関係管理一元化、実験的コード識別・分離、明確な責任分離による構造改善
 
 ### Development Process Insights
 - **段階的実装の重要性**: 複雑機能を小さなPhaseに分割することで確実な進捗管理

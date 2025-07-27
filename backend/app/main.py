@@ -1,82 +1,61 @@
-import os
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 
-import uvicorn
-from agents import Agent, ModelSettings, Runner
+from agents import Agent, Runner
 from agents.stream_events import RawResponsesStreamEvent
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from fastapi.security import HTTPAuthorizationCredentials
-from openai import AsyncOpenAI
 from openai.types.responses import (
     ResponseFunctionCallArgumentsDeltaEvent,
     ResponseFunctionToolCall,
     ResponseOutputItemAddedEvent,
     ResponseTextDeltaEvent,
 )
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .auth import (
+from .clients import get_chat_agent, lifespan
+from .core.config import settings
+from .core.deps import get_current_user as get_current_user_dep
+from .core.security import (
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
     authenticate_user,
     create_access_token,
     get_password_hash,
-    security,
     verify_password,
-    verify_token,
 )
-from .database import get_db
+from .db.session import get_db
 from .models import Conversation, Message, User
-from .tools import AVAILABLE_TOOLS
+from .schemas import (
+    ChatRequest,
+    LoginRequest,
+    SSEEvent,
+    Token,
+    UserResponse,
+    UserUpdateRequest,
+)
 
-load_dotenv()
-
-app = FastAPI(title="LLM Chat API", version="0.2.0")
+app = FastAPI(title=settings.APP_TITLE, version=settings.APP_VERSION, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 本番は絞る
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=settings.CORS_ALLOW_HEADERS,
 )
 
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# Agents SDK設定（Phase 1でツール機能を追加）
-chat_agent = Agent(
-    name="ChatAssistant",
-    instructions="""あなたは親切で知識豊富なアシスタントです。
-    ユーザーの質問に正確かつ丁寧に答えてください。
-    必要に応じてツールを使用してください。
-    時刻の取得や計算が必要な場合は、適切なツールを使用してください。
-    回答は常にユーザーの言語で行ってください。""",
-    model="gpt-4o",
-    model_settings=ModelSettings(
-        max_tokens=1024,
-        temperature=0.7,
-    ),
-    tools=AVAILABLE_TOOLS,  # tools.pyで定義されたツールを自動で利用
-)
+# 外部APIクライアントはclients.pyで管理（lifespanで初期化）
 
 
-# ---------- Pydantic ----------
+# ---------- 以下、Pydanticクラスはschemas/に移動済み ----------
 
 
-class ChatRequest(BaseModel):
-    message: str
-    conversation_id: str | None = None
-
-
-# Phase 1: ツール実行追跡クラス
-class ToolExecutionTracker:
+# Phase 1: SSEストリーミング用ツール実行追跡クラス
+class StreamToolTracker:
     """ツール実行の追跡とメタデータ生成を管理"""
 
     def __init__(self):
@@ -127,69 +106,9 @@ class ToolExecutionTracker:
         }
 
 
-class SSEEvent(BaseModel):
-    type: Literal[
-        "status",
-        "content",
-        "done",
-        "error",
-        "tool_start",
-        "tool_complete",
-        "tool_decision",
-    ]
-    message: str | None = None
-    content: str | None = None
-    message_id: str | None = None
-    tool_name: str | None = None
-    tool_output: str | None = None
-    execution_id: str | None = None
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"  # noqa: S105
-    expires_in: int
-
-
-class UserResponse(BaseModel):
-    id: str
-    email: str
-    username: str
-    is_active: bool
-    created_at: datetime
-
-
-class UserUpdateRequest(BaseModel):
-    username: str | None = None
-    current_password: str | None = None
-    new_password: str | None = None
-
-
 # ---------- Dependency ----------
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
-) -> User:
-    """現在のユーザーを取得"""
-    user_id = verify_token(credentials.credentials)
-    if user_id is None:
-        raise HTTPException(
-            status_code=401, detail="Invalid authentication credentials"
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if not user.is_active:
-        raise HTTPException(status_code=401, detail="Inactive user")
-
-    return user
+# get_current_userは core/deps.pyに移動済み
+get_current_user = get_current_user_dep
 
 
 # ---------- 認証エンドポイント ----------
@@ -284,52 +203,7 @@ async def logout(current_user: User = Depends(get_current_user)):
 
 
 # ---------- REST ----------
-# @app.post("/api/chat")
-# async def chat(req: ChatRequest, db: Session = Depends(get_db)):
-#     """最初の 1 往復 (非ストリーミング) 用"""
-#     if req.conversation_id:
-#         conv = db.query(Conversation).get(req.conversation_id)
-#         if not conv:
-#             raise HTTPException(404, "Conversation not found")
-#     else:
-#         conv = Conversation()
-#         db.add(conv)
-#         db.commit()
-
-#     user_msg = Message(conversation_id=conv.id, role="user", content=req.message)
-#     db.add(user_msg)
-#     db.commit()
-
-#     # --- Call OpenAI ---
-#     api_messages = [{"role": m.role, "content": m.content} for m in conv.messages]
-#     api_messages.insert(
-#         0,
-#         {
-#             "role": "system",
-#             "content": "You are a helpful assistant. Please respond in the same language as the user's input.",
-#         },
-#     )
-#     resp = client.chat.completions.create(
-#         model="gpt-4.1", messages=api_messages, max_tokens=1024, temperature=0.7
-#     )
-#     assistant_msg = Message(
-#         conversation_id=conv.id,
-#         role="assistant",
-#         content=resp.choices[0].message.content,
-#     )
-#     db.add(assistant_msg)
-
-#     # --- title生成処理 ---
-#     if not conv.title:
-#         conv.title = req.message[:50] + ("..." if len(req.message) > 50 else "")
-#     conv.updated_at = datetime.utcnow()
-#     db.commit()
-
-#     return {
-#         "conversation_id": conv.id,
-#         "message_id": assistant_msg.id,
-#         "message": assistant_msg.content,
-#     }
+# 非ストリーミング実装は廃止済み（SSEストリーミングで代替）
 
 
 @app.post("/api/conversations")
@@ -396,14 +270,13 @@ def convert_tool_metadata_to_executions(
         return None
 
     executions = []
-    for i, tool in enumerate(tools_used):
+    for tool in tools_used:
         # 必要なフィールドの存在確認
         if not isinstance(tool, dict) or "name" not in tool:
             continue
 
-        # 一意IDの生成（name + index + start_time）
-        start_time = tool.get("start_time", 0)
-        execution_id = f"{tool['name']}_{i}_{int(start_time) if start_time else 0}"
+        # 一意IDの生成（UUID）
+        execution_id = str(uuid.uuid4())
 
         executions.append(
             {
@@ -479,6 +352,7 @@ async def stream_chat(
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    chat_agent: Agent = Depends(get_chat_agent),
 ):
     """SSEによるリアルタイムチャット"""
 
@@ -514,9 +388,11 @@ async def stream_chat(
             # ストリーミング開始
             assistant_content = ""
             assistant_id = str(uuid.uuid4())
-            tool_tracker = ToolExecutionTracker()  # Phase 1: ツール追跡開始
+            tool_tracker = (
+                StreamToolTracker()
+            )  # Phase 1: SSEストリーミング用ツール追跡開始
 
-            # Agents SDK でストリーミング実行
+            # Agents SDK でストリーミング実行（依存性注入されたagent使用）
             result = Runner.run_streamed(chat_agent, api_messages)
 
             async for event in result.stream_events():
@@ -537,7 +413,7 @@ async def stream_chat(
                             else getattr(raw_item, "arguments", {})
                         )
                         call_id = getattr(
-                            event.item, "id", f"call_{int(time.time() * 1000)}"
+                            event.item, "id", str(uuid.uuid4())
                         )
 
                         print(
@@ -696,6 +572,7 @@ async def stream_chat(
 
 # ---------- run ----------
 def start():
+    import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)  # noqa: S104
 
 

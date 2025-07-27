@@ -1,3 +1,5 @@
+"""認証・セキュリティ関連の機能"""
+
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -6,7 +8,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from .models import User
+from ..models import User
 
 # JWT設定
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")

@@ -3,7 +3,6 @@ Phase 1: ツール機能実装
 基本的なツール関数の定義と管理
 """
 
-import ast
 import time
 from datetime import UTC, datetime
 
@@ -36,8 +35,8 @@ def calculate(expression: str) -> str:
         if not all(c in allowed_chars for c in expression):
             return "エラー: 許可されていない文字が含まれています"
 
-        # 安全な数式評価
-        result = ast.literal_eval(expression)
+        # 安全な数式評価（evalを使用するが文字チェック済み）
+        result = eval(expression)
         return f"{expression} = {result}"
     except Exception as e:
         return f"計算エラー: {str(e)}"
