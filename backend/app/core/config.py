@@ -28,11 +28,6 @@ class Settings:
     CORS_ALLOW_METHODS: list[str] = ["*"]
     CORS_ALLOW_HEADERS: list[str] = ["*"]
     
-    def get_openai_api_key(self) -> str:
-        """OpenAI APIキーを取得"""
-        if not self.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY environment variable is required")
-        return self.OPENAI_API_KEY
 
 
 # グローバル設定インスタンス

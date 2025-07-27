@@ -39,24 +39,25 @@ from .core.security import (
     verify_password,
     verify_token,
 )
+from .core.config import settings
 from .db.session import get_db
 from .models import Conversation, Message, User
 from .tools import AVAILABLE_TOOLS
 
 load_dotenv()
 
-app = FastAPI(title="LLM Chat API", version="0.2.0")
+app = FastAPI(title=settings.APP_TITLE, version=settings.APP_VERSION)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 本番は絞る
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=settings.CORS_ALLOW_HEADERS,
 )
 
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 # Agents SDK設定（Phase 1でツール機能を追加）
 chat_agent = Agent(
