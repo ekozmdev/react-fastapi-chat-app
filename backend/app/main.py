@@ -19,10 +19,18 @@ from openai.types.responses import (
     ResponseOutputItemAddedEvent,
     ResponseTextDeltaEvent,
 )
-from pydantic import BaseModel
+from .schemas import (
+    ChatRequest,
+    LoginRequest,
+    SSEEvent,
+    Token,
+    UserResponse,
+    UserUpdateRequest,
+)
 from sqlalchemy.orm import Session
 
-from .auth import (
+from .core.deps import get_current_user as get_current_user_dep
+from .core.security import (
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
     authenticate_user,
     create_access_token,
@@ -31,7 +39,7 @@ from .auth import (
     verify_password,
     verify_token,
 )
-from .database import get_db
+from .db.session import get_db
 from .models import Conversation, Message, User
 from .tools import AVAILABLE_TOOLS
 
@@ -67,12 +75,7 @@ chat_agent = Agent(
 )
 
 
-# ---------- Pydantic ----------
-
-
-class ChatRequest(BaseModel):
-    message: str
-    conversation_id: str | None = None
+# ---------- 以下、Pydanticクラスはschemas/に移動済み ----------
 
 
 # Phase 1: ツール実行追跡クラス
@@ -127,69 +130,11 @@ class ToolExecutionTracker:
         }
 
 
-class SSEEvent(BaseModel):
-    type: Literal[
-        "status",
-        "content",
-        "done",
-        "error",
-        "tool_start",
-        "tool_complete",
-        "tool_decision",
-    ]
-    message: str | None = None
-    content: str | None = None
-    message_id: str | None = None
-    tool_name: str | None = None
-    tool_output: str | None = None
-    execution_id: str | None = None
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"  # noqa: S105
-    expires_in: int
-
-
-class UserResponse(BaseModel):
-    id: str
-    email: str
-    username: str
-    is_active: bool
-    created_at: datetime
-
-
-class UserUpdateRequest(BaseModel):
-    username: str | None = None
-    current_password: str | None = None
-    new_password: str | None = None
 
 
 # ---------- Dependency ----------
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
-) -> User:
-    """現在のユーザーを取得"""
-    user_id = verify_token(credentials.credentials)
-    if user_id is None:
-        raise HTTPException(
-            status_code=401, detail="Invalid authentication credentials"
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if not user.is_active:
-        raise HTTPException(status_code=401, detail="Inactive user")
-
-    return user
+# get_current_userは core/deps.pyに移動済み
+get_current_user = get_current_user_dep
 
 
 # ---------- 認証エンドポイント ----------
