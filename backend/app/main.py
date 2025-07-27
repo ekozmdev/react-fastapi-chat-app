@@ -229,52 +229,7 @@ async def logout(current_user: User = Depends(get_current_user)):
 
 
 # ---------- REST ----------
-# @app.post("/api/chat")
-# async def chat(req: ChatRequest, db: Session = Depends(get_db)):
-#     """最初の 1 往復 (非ストリーミング) 用"""
-#     if req.conversation_id:
-#         conv = db.query(Conversation).get(req.conversation_id)
-#         if not conv:
-#             raise HTTPException(404, "Conversation not found")
-#     else:
-#         conv = Conversation()
-#         db.add(conv)
-#         db.commit()
-
-#     user_msg = Message(conversation_id=conv.id, role="user", content=req.message)
-#     db.add(user_msg)
-#     db.commit()
-
-#     # --- Call OpenAI ---
-#     api_messages = [{"role": m.role, "content": m.content} for m in conv.messages]
-#     api_messages.insert(
-#         0,
-#         {
-#             "role": "system",
-#             "content": "You are a helpful assistant. Please respond in the same language as the user's input.",
-#         },
-#     )
-#     resp = client.chat.completions.create(
-#         model="gpt-4.1", messages=api_messages, max_tokens=1024, temperature=0.7
-#     )
-#     assistant_msg = Message(
-#         conversation_id=conv.id,
-#         role="assistant",
-#         content=resp.choices[0].message.content,
-#     )
-#     db.add(assistant_msg)
-
-#     # --- title生成処理 ---
-#     if not conv.title:
-#         conv.title = req.message[:50] + ("..." if len(req.message) > 50 else "")
-#     conv.updated_at = datetime.utcnow()
-#     db.commit()
-
-#     return {
-#         "conversation_id": conv.id,
-#         "message_id": assistant_msg.id,
-#         "message": assistant_msg.content,
-#     }
+# 非ストリーミング実装は廃止済み（SSEストリーミングで代替）
 
 
 @app.post("/api/conversations")
