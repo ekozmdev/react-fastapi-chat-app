@@ -270,14 +270,13 @@ def convert_tool_metadata_to_executions(
         return None
 
     executions = []
-    for i, tool in enumerate(tools_used):
+    for tool in tools_used:
         # 必要なフィールドの存在確認
         if not isinstance(tool, dict) or "name" not in tool:
             continue
 
-        # 一意IDの生成（name + index + start_time）
-        start_time = tool.get("start_time", 0)
-        execution_id = f"{tool['name']}_{i}_{int(start_time) if start_time else 0}"
+        # 一意IDの生成（UUID）
+        execution_id = str(uuid.uuid4())
 
         executions.append(
             {
@@ -414,7 +413,7 @@ async def stream_chat(
                             else getattr(raw_item, "arguments", {})
                         )
                         call_id = getattr(
-                            event.item, "id", f"call_{int(time.time() * 1000)}"
+                            event.item, "id", str(uuid.uuid4())
                         )
 
                         print(
