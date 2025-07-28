@@ -183,3 +183,5 @@ compose.yaml            # Docker Compose orchestration
 - **技術制約の早期把握**: 外部ライブラリ（openai-agents SDK）の制約を理解した設計変更
 - **ユーザビリティ重視**: 複雑な設計から実用的なシンプル設計への方向転換
 - **データ互換性確保**: Phase間でのデータ移行・変換パターンの確立
+- **外部APIクライアント管理**: Dependency Injection + Lifespan Eventsによるリソース効率化、main.pyからの責任分離によるアーキテクチャ改善（clients.py分離パターン）
+- **リファクタリング時の注意点**: インポート削除時の依存関係追跡の重要性、使用箇所の完全な特定によるコード整合性確保
