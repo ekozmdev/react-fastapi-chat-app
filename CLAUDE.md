@@ -18,7 +18,7 @@ This is a React + FastAPI chat application with real-time Server-Sent Events (SS
 ```bash
 npm run dev          # Start Vite dev server on :3000
 npm run build        # Build for production (runs tsc + vite build)  
-npm run lint         # Biome lint (DO NOT add options to package.json scripts)
+npm run lint         # Biome lint with fix and error-on-warnings
 npm run format       # Biome format
 npm run check        # Biome check
 npm run preview      # Preview production build
@@ -51,14 +51,26 @@ docker-compose ps       # Check service status
   
 /backend/               # FastAPI application
   /app/                 # Application code
+    /core/              # Core infrastructure layer
+      config.py         # Application settings and configuration
+      deps.py           # Dependency injection utilities
+      security.py       # JWT authentication and password handling
+    /db/                # Database layer
+      session.py        # Database connection and session management
     /models/            # SQLAlchemy database models
       __init__.py       # Model imports for app-wide access
       base.py           # SQLAlchemy Base declaration
       user.py           # User model
       conversation.py   # Conversation and Message models
-    auth.py             # JWT authentication and password handling
-    database.py         # Database connection and session management
+      tool_execution.py # Tool execution tracking model
+    /schemas/           # Pydantic data validation schemas
+      auth.py           # Authentication request/response schemas
+      common.py         # Common shared schemas
+      conversation.py   # Conversation-related schemas
+    clients.py          # External API client management (OpenAI, Agents)
     main.py             # FastAPI app with routes and business logic
+    tools.py            # Tool definitions for agent interactions
+    tool_execution_manager.py # Tool execution lifecycle management
   /alembic/             # Database migrations
   /scripts/             # Management scripts (user management, etc.)
   pyproject.toml        # uv dependencies and ruff configuration
@@ -83,13 +95,17 @@ compose.yaml            # Docker Compose orchestration
 - Uses UUID primary keys and proper foreign key relationships
 
 ### Technology Migration Notes
-- Recently migrated from Poetry to uv for dependency management
-- Recently migrated from WebSocket to Server-Sent Events (SSE) for better HTTP compatibility
-- Recently migrated from direct OpenAI API calls to openai-agents-python SDK
+- **Dependency Management**: Migrated from Poetry to uv (COMPLETED)
+- **Real-time Communication**: Migrated from WebSocket to Server-Sent Events (SSE) (COMPLETED)
+- **LLM Integration**: Migrated from direct OpenAI API calls to openai-agents-python SDK (COMPLETED)
+- **Architecture**: Implemented layered architecture with core/, db/, schemas/ separation (COMPLETED)
+- **External API Management**: Implemented clients.py with Dependency Injection + Lifespan Events (COMPLETED)
+- **Tool Execution**: Phase 2 detailed tool execution tracking with database persistence (COMPLETED)
+- **Real-time Tool Detection**: Phase 4 instant tool decision detection via ResponseOutputItemAddedEvent (COMPLETED)
 - Uses openai-agents SDK with Agent/ModelSettings pattern for LLM interactions
-- SSE provides foundation for future Function Calling/MCP tool status display
-- Agent-based architecture enables future multi-agent and tool integration features
-- All code should be written in Japanese documentation style (see existing files)
+- SSE provides foundation for Function Calling/MCP tool status display
+- Agent-based architecture enables multi-agent and tool integration features
+- All code written in Japanese documentation style (see existing files)
 
 ### Tool Use Implementation (Phase 1, 2, 3, 4)
 - **Phase 1**: Basic tool functionality with minimal frontend changes
@@ -138,15 +154,57 @@ compose.yaml            # Docker Compose orchestration
 
 ### TypeScript (Frontend)
 - Strict TypeScript configuration
-- Biome for linting and formatting
+- Biome for linting and formatting with `--fix --error-on-warnings` options
 - Minimal external dependencies (only React essentials)
 - Component-based architecture
-- **IMPORTANT**: DO NOT add command-line options to package.json scripts (禁止)
 
 ## Testing
 
 - Backend: pytest with asyncio support
 - Run tests with: `uv run pytest`
+
+## Pre-Commit Checklist
+
+コミット前に必ず以下の確認手順を実施してください：
+
+### 1. コード品質チェック
+
+#### フロントエンド（`/frontend/`）
+```bash
+npm run lint         # Biome lint with fix and error-on-warnings
+npm run format       # Biome format (必要に応じて)
+npm run check        # Biome check
+```
+
+#### バックエンド（`/backend/`）
+```bash
+uv run ruff check    # Ruff lint check
+uv run ruff format   # Ruff format (必要に応じて)
+uv run pytest       # テスト実行（可能な場合）
+```
+
+### 2. ステージング内容のセルフレビュー
+
+```bash
+git status           # 変更ファイル一覧確認
+git diff --staged    # ステージング内容の詳細確認
+```
+
+**レビューポイント：**
+- 意図しない変更が含まれていないか
+- コミットメッセージに含める変更内容の把握
+- 機密情報（APIキー、パスワード等）が含まれていないか
+- デバッグ用コード・コメントが残っていないか
+
+### 3. コミット実行
+
+品質チェックとセルフレビューが完了後、コミットを実行：
+
+```bash
+git commit -m "適切なコミットメッセージ"
+```
+
+**Note**: この手順により、コードベースの品質維持とレビュー効率の向上を実現できます。
 
 ## Development Lessons Learned (Phase 0-9実装エッセンス)
 
@@ -183,3 +241,5 @@ compose.yaml            # Docker Compose orchestration
 - **技術制約の早期把握**: 外部ライブラリ（openai-agents SDK）の制約を理解した設計変更
 - **ユーザビリティ重視**: 複雑な設計から実用的なシンプル設計への方向転換
 - **データ互換性確保**: Phase間でのデータ移行・変換パターンの確立
+- **外部APIクライアント管理**: Dependency Injection + Lifespan Eventsによるリソース効率化、main.pyからの責任分離によるアーキテクチャ改善（clients.py分離パターン）
+- **リファクタリング時の注意点**: インポート削除時の依存関係追跡の重要性、使用箇所の完全な特定によるコード整合性確保

@@ -4,43 +4,68 @@ OpenAI GPT-4を使用したチャットアプリケーション。React + Vite�
 
 ## 技術スタック
 
-- **フロントエンド**: React + TypeScript + Vite + React Router
-- **バックエンド**: FastAPI 0.116+ + uv + Python 3.13
-- **データベース**: PostgreSQL 16 + Alembic
-- **認証**: JWT + bcrypt
-- **LLM**: OpenAI GPT-4o (via openai-agents-python SDK)
+- **フロントエンド**: React + TypeScript + Vite 7 + React Router + Biome
+- **バックエンド**: FastAPI 0.116+ + uv + Python 3.13 + Ruff
+- **データベース**: PostgreSQL 16 + SQLAlchemy 2.0 + Alembic
+- **認証**: JWT + bcrypt/Argon2
+- **LLM**: OpenAI GPT-4o-mini (via openai-agents-python SDK)
 - **リアルタイム通信**: Server-Sent Events (SSE)（認証付き）
+- **ツール実行追跡**: リアルタイムツール実行状態表示（Phase 2実装）
 - **コンテナ**: Docker + Docker Compose
 - **Node.js**: 22+（Vite v7要件）
 
 ## プロジェクト構成
 
 ```
-llm-chat-app/
+react-fastapi-chat-app/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx
 │   │   ├── App.css
+│   │   ├── AuthContext.tsx
+│   │   ├── LoginForm.tsx
+│   │   ├── MarkdownRenderer.tsx
+│   │   ├── ProtectedRoute.tsx
 │   │   ├── main.tsx
 │   │   └── index.css
-│   ├── public/
 │   ├── index.html
 │   ├── vite.config.ts
 │   ├── tsconfig.json
+│   ├── biome.json
 │   ├── package.json
 │   └── Dockerfile
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
-│   │   └── main.py
+│   │   ├── core/
+│   │   │   ├── config.py
+│   │   │   ├── deps.py
+│   │   │   └── security.py
+│   │   ├── db/
+│   │   │   └── session.py
+│   │   ├── models/
+│   │   │   ├── base.py
+│   │   │   ├── conversation.py
+│   │   │   ├── tool_execution.py
+│   │   │   └── user.py
+│   │   ├── schemas/
+│   │   │   ├── auth.py
+│   │   │   ├── common.py
+│   │   │   └── conversation.py
+│   │   ├── clients.py
+│   │   ├── main.py
+│   │   ├── tools.py
+│   │   └── tool_execution_manager.py
 │   ├── alembic/
-│   │   └── env.py
+│   │   └── versions/
+│   ├── scripts/
+│   │   └── manage_users.py
 │   ├── pyproject.toml
-│   │   ├── alembic.ini
+│   ├── alembic.ini
 │   ├── .env
 │   └── Dockerfile
 ├── nginx/
 │   └── nginx.conf
+├── CLAUDE.md
 └── compose.yaml
 ```
 
@@ -147,6 +172,11 @@ npm install
 
 # 開発サーバー起動
 npm run dev
+
+# コードフォーマット・リント
+npm run lint    # Biome lint with fix and error-on-warnings
+npm run format  # Biome format
+npm run check   # Biome check
 ```
 
 ## 開発サーバーの起動
@@ -246,6 +276,7 @@ docker compose up -d
 
 ### conversations テーブル
 - `id`: 会話ID (UUID)
+- `user_id`: ユーザーID (外部キー)
 - `title`: 会話タイトル
 - `created_at`: 作成日時
 - `updated_at`: 更新日時
@@ -255,29 +286,50 @@ docker compose up -d
 - `conversation_id`: 会話ID (外部キー)
 - `role`: ロール (user/assistant/system)
 - `content`: メッセージ内容
+- `tool_metadata`: ツールメタデータ (JSON) - Phase 1互換
+- `has_detailed_executions`: 詳細実行データ有無 (Boolean)
+- `created_at`: 作成日時
+
+### tool_executions テーブル（Phase 2）
+- `id`: 実行ID (UUID)
+- `message_id`: メッセージID (外部キー)
+- `tool_name`: ツール名
+- `tool_arguments`: ツール引数 (JSON)
+- `call_status`: 呼び出し状態
+- `execution_status`: 実行状態
+- `tool_output`: ツール出力
+- `execution_time_ms`: 実行時間 (ミリ秒)
+- `created_at`: 作成日時
+
+### users テーブル
+- `id`: ユーザーID (UUID)
+- `email`: メールアドレス (ユニーク)
+- `hashed_password`: ハッシュ化パスワード
+- `is_active`: アクティブ状態
 - `created_at`: 作成日時
 
 ## カスタマイズ
 
 ### LLMモデル・設定の変更
 
-`backend/app/main.py`の以下の部分を変更：
+`backend/app/clients.py`の以下の部分を変更：
 ```python
-# Agents SDK設定
-chat_agent = Agent(
+# Chat Agent 初期化
+self.chat_agent = Agent(
     name="ChatAssistant",
-    instructions="You are a helpful assistant. Please respond in the same language as the user's input.",
-    model="gpt-4o",  # ここを変更
-    model_settings=ModelSettings(
-        max_tokens=1024,  # ここを変更
-        temperature=0.7,  # ここを変更
-    )
+    instructions="""あなたは親切で知識豊富なアシスタントです。
+    ユーザーの質問に正確かつ丁寧に答えてください。
+    必要に応じてツールを使用してください。
+    時刻の取得や計算が必要な場合は、適切なツールを使用してください。
+    """,
+    model=ModelSettings(model="gpt-4o-mini"),  # ここを変更
+    tools=AVAILABLE_TOOLS,
 )
 ```
 
 利用可能なモデル（openai-agents-python SDK経由）:
-- `gpt-4o` (推奨・現在使用中)
-- `gpt-4o-mini` (高速・低コスト)
+- `gpt-4o-mini` (高速・低コスト・現在使用中)
+- `gpt-4o` (高性能)
 - `gpt-3.5-turbo` (旧モデル)
 - `o1-preview` (推論特化)
 - `o1-mini` (推論特化・軽量)
@@ -371,26 +423,28 @@ MIT License
 
 ## 更新履歴
 
+- 2025年7月: Phase 1-4完了・レイヤー型アーキテクチャ採用
+  - **Phase 1-2**: ツール実行追跡とリアルタイム表示実装
+  - **Phase 3-4**: 真のリアルタイムツール検出（ResponseOutputItemAddedEvent）
+  - **レイヤー型アーキテクチャ**: core/, db/, schemas/, models/分離
+  - **外部APIクライアント管理**: clients.pyでDependency Injection実装
+  - **コード品質向上**: Biome/Ruff統一、TypeScript安全性向上
+
 - 2025年7月: openai-agents-python SDK導入
   - 直接のOpenAI API呼び出しからopenai-agents-python SDKに移行
-  - モデル: GPT-4.1 → GPT-4o
+  - モデル: GPT-4o-mini採用（高速・低コスト）
   - システムプロンプトをAgent.instructionsで管理
-  - 将来的なエージェント機能拡張の基盤構築
-  - 既存のSSEストリーミング機能は完全維持
+  - エージェント機能拡張の基盤構築
+  - 既存のSSEストリーミング機能完全維持
 
 - 2025年7月: SSE版リリース
-  - WebSocketからServer-Sent Events (SSE)への移行
+  - WebSocketからServer-Sent Events (SSE)への移行完了
   - HTTPベースの認証（Authorizationヘッダー）
   - Function Calling/MCP対応の基盤実装
   - UIアニメーション最適化
 
-- 2025年7月: Vite v7対応
-  - Vite v7.0.5にアップデート
-  - Node.js 22+要件対応
-  - Dockerfileの更新
-
-- 2025年6月: 最新バージョンに対応
-  - React + Vite 7
-  - Poetry → uv移行
-  - OpenAI GPT-4.1モデル
-  - FastAPI 0.111+
+- 2025年7月: 開発環境最新化
+  - Vite v7.0.5対応・Node.js 22+要件対応
+  - Poetry → uv移行完了
+  - PostgreSQL 16 + SQLAlchemy 2.0
+  - FastAPI 0.116+対応
