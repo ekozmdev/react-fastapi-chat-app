@@ -133,7 +133,7 @@ compose.yaml            # Docker Compose orchestration
 
 ## Environment Setup
 
-### Required Environment Variables (in `/backend/.env`)
+### Required Environment Variables (in `/.env`)
 - `OPENAI_API_KEY`: OpenAI API key for GPT integration
 - `DATABASE_URL`: PostgreSQL connection string
 

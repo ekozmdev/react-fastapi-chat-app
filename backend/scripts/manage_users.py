@@ -21,15 +21,17 @@ from pathlib import Path
 # プロジェクトのルートディレクトリをPythonパスに追加
 sys.path.append(str(Path(__file__).parent.parent))
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from passlib.context import CryptContext
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models import User
 
-# 環境変数を読み込み
-load_dotenv()
+# プロジェクトルートの.envファイルを自動検出して読み込み
+dotenv_path = find_dotenv()
+print(f"[MANAGE_USERS] Loading .env from: {dotenv_path}")
+load_dotenv(dotenv_path)
 
 # データベース接続
 DATABASE_URL = os.getenv(

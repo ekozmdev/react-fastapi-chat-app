@@ -6,12 +6,15 @@
 
 import os
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from sqlalchemy import create_engine
 
 from app.models import Base
 
-load_dotenv()
+# プロジェクトルートの.envファイルを自動検出して読み込み
+dotenv_path = find_dotenv()
+print(f"[INIT_DB] Loading .env from: {dotenv_path}")
+load_dotenv(dotenv_path)
 
 
 def init_database():
