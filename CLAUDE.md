@@ -137,6 +137,38 @@ compose.yaml            # Docker Compose orchestration
 - `OPENAI_API_KEY`: OpenAI API key for GPT integration
 - `DATABASE_URL`: PostgreSQL connection string
 
+### Environment Variable Best Practices (Phase 0 Lessons)
+
+#### Docker Compose Environment Variables
+Docker Composeで環境変数を使用する際は、**2段階の設定**が必要です：
+
+1. **Docker Compose変数置換**: プロジェクトルートの`.env`ファイルから変数を読み込み
+2. **コンテナ環境変数**: `environment`セクションで明示的にコンテナに変数を渡す
+
+```yaml
+# compose.yaml
+services:
+  fastapi:
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}  # .envから置換
+      DATABASE_URL: ${DATABASE_URL}      # .envから置換
+```
+
+#### Python環境変数読み込みベストプラクティス
+```python
+# 推奨パターン
+from dotenv import find_dotenv, load_dotenv
+
+dotenv_path = find_dotenv()
+print(f"[CONFIG] Loading .env from: {dotenv_path}")  # デバッグ用
+load_dotenv(dotenv_path)
+```
+
+**メリット**:
+- プロジェクトルートの.envを確実に検出
+- 実行場所に依存しない堅牢性
+- ログ出力による可視性向上
+
 ### Development Dependencies
 - Node.js 22+ 
 - Python 3.13+
@@ -208,29 +240,32 @@ git commit -m "適切なコミットメッセージ"
 
 ## Development Lessons Learned (Phase 0-9実装エッセンス)
 
+### Environment & Configuration Management
+- **Phase 0**: 環境変数管理の最適化 - .envファイルのプロジェクトルート移動、find_dotenv()による堅牢な自動検出、Docker Compose環境変数の2段階設定パターン、ログ出力による可視化とデバッグ性向上
+
 ### Architecture & Database Design Patterns
-- **Phase 0**: アーキテクチャ分離手法 - models/ディレクトリによるSQLAlchemyモデル分離、alembic依存関係管理の重要性
-- **Phase 1**: 段階的ツール導入 - @function_toolデコレータによる拡張可能設計、tool_metadata軽量データ保存アプローチ
-- **Phase 2**: 詳細実行追跡 - ToolExecutionManagerクラスによる2段階ステータス管理、マイグレーション・データベース設計のベストプラクティス
+- **Phase 1**: アーキテクチャ分離手法 - models/ディレクトリによるSQLAlchemyモデル分離、alembic依存関係管理の重要性
+- **Phase 2**: 段階的ツール導入 - @function_toolデコレータによる拡張可能設計、tool_metadata軽量データ保存アプローチ
+- **Phase 3**: 詳細実行追跡 - ToolExecutionManagerクラスによる2段階ステータス管理、マイグレーション・データベース設計のベストプラクティス
 
 ### SDK Integration & Event Handling
-- **Phase 3**: openai-agents-python SDK正式活用 - ResponseTextDeltaEvent vs ResponseFunctionCallArgumentsDeltaEventの型分離、フィルタリング削除による根本的アーキテクチャ改善
-- **Phase 4**: 真のリアルタイム実装 - ResponseOutputItemAddedEventによる即座スピナー表示、双方向重複防止ロジック、deepwiki技術レビュー手法
+- **Phase 4**: openai-agents-python SDK正式活用 - ResponseTextDeltaEvent vs ResponseFunctionCallArgumentsDeltaEventの型分離、フィルタリング削除による根本的アーキテクチャ改善
+- **Phase 5**: 真のリアルタイム実装 - ResponseOutputItemAddedEventによる即座スピナー表示、双方向重複防止ロジック、deepwiki技術レビュー手法
 
 ### UI/UX Design Patterns
-- **Phase 5**: ChatGPT風サイドバー設計 - `<`/`>`アイコンによる直感的トグルUI、CSS transition活用のスムーズアニメーション
-- **Phase 6**: Flexboxレイアウト最適化 - margin-top: autoによる下部固定配置テクニック、最小限CSS変更での効果的UI改善
-- **Phase 7**: データ永続化修復 - バックエンドAPIとフロントエンド期待値の不整合解決、convert_tool_metadata_to_executions変換パターン
-- **Phase 8**: コンパクトボタン設計 - CSS中央配置ベストプラクティス（margin: autoの活用）、段階的UI簡素化手法
+- **Phase 6**: ChatGPT風サイドバー設計 - `<`/`>`アイコンによる直感的トグルUI、CSS transition活用のスムーズアニメーション
+- **Phase 7**: Flexboxレイアウト最適化 - margin-top: autoによる下部固定配置テクニック、最小限CSS変更での効果的UI改善
+- **Phase 8**: データ永続化修復 - バックエンドAPIとフロントエンド期待値の不整合解決、convert_tool_metadata_to_executions変換パターン
+- **Phase 9**: コンパクトボタン設計 - CSS中央配置ベストプラクティス（margin: autoの活用）、段階的UI簡素化手法
 
 ### Code Quality & Best Practices
-- **Phase 9**: 統合コード品質改善 - 
+- **Phase 10**: 統合コード品質改善 - 
   - フロントエンド: SVGアクセシビリティ対応（WCAG 2.1 AA準拠）、キーボードナビゲーション実装、TypeScript安全性向上（non-null assertion削除）
   - バックエンド: 現代的型アノテーション（Dict→dict、List→list、Optional→T|None）、セキュリティ改善（eval→ast.literal_eval）、未使用インポート削除
   - 自動化: Biome/Ruffによる統一コードフォーマット、適切なlint警告サプレス手法
 
 ### Architecture Refactoring & Code Optimization
-- **Phase 10**: 軽いリファクタリング・大規模クリーンアップ - 
+- **Phase 11**: 軽いリファクタリング・大規模クリーンアップ - 
   - **段階的リファクタリング**: 機能破壊ゼロでレイヤー型アーキテクチャ導入（core/設定・認証・依存性、schemas/型定義、db/データ層分離）
   - **安全なクリーンアップ**: 重複コード・デッドコード・未使用ファイルの体系的特定と削除（1171行・30%削減達成）
   - **品質保証プロセス**: インポートテスト・機能動作確認による段階的検証、SSE/ツール機能100%保持
