@@ -821,13 +821,15 @@ services:
   - 現在: `"LLM Chat API"`
   - 対応: 環境別API名の設定
 
-- [ ] **FASTAPI_HOST**を環境変数化 (app/main.py)
-  - 現在: `"0.0.0.0"`
-  - 対応: ホストバインドアドレスの設定
+- [x] ~~**FASTAPI_HOST**を環境変数化 (app/main.py)~~
+  - ~~現在: `"0.0.0.0"`~~
+  - ~~対応: ホストバインドアドレスの設定~~
+  - **対応不要**: 開発環境では固定値が適切、本番はuvicornコマンドで直接指定
 
-- [ ] **FASTAPI_PORT**を環境変数化 (app/main.py)
-  - 現在: `8000`
-  - 対応: ポート番号の環境別設定
+- [x] ~~**FASTAPI_PORT**を環境変数化 (app/main.py)~~
+  - ~~現在: `8000`~~
+  - ~~対応: ポート番号の環境別設定~~
+  - **対応不要**: プロジェクト内で8000ポート統一、Docker使用時はcompose.yamlで管理
 
 - [x] **OPENAI_MODEL**を環境変数化 (app/clients.py)
   - 現在: `"gpt-4o"`
@@ -882,9 +884,10 @@ services:
   - 現在: `86400`
   - 対応: プロキシタイムアウト制御
 
-- [ ] **DOCKER_EXPOSE_PORT**を環境変数化 (Dockerfile)
-  - 現在: `8000`
-  - 対応: コンテナネットワーク設定
+- [x] ~~**DOCKER_EXPOSE_PORT**を環境変数化 (Dockerfile)~~
+  - ~~現在: `8000`~~
+  - ~~対応: コンテナネットワーク設定~~
+  - **対応不要**: プロジェクト内で8000ポート統一、compose.yamlでポートマッピング管理
 
 - [ ] **ALEMBIC_DATABASE_URL**を環境変数化 (alembic.ini)
   - 現在: ハードコードされたDB URL
@@ -1027,10 +1030,28 @@ model=settings.OPENAI_MODEL
 
 | 環境変数 | デフォルト値（constants.py） | 設定場所 |
 |---------|---------------------------|---------|
-| `OPENAI_MODEL` | `"gpt-4o"` | `config.py:24` |
-| `DATABASE_URL` | `"postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"` | `config.py:27` |
+| `OPENAI_MODEL` | `"gpt-4o"` | `config.py:36` |
+| `DATABASE_URL` | `"postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"` | `config.py:40` |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | `config.py:44` |
 
 **従来の`DATABASE_URL_FALLBACK`は不要** - constants.pyパターンにより、環境変数未設定時は自動的にデフォルト値が使用される設計に統一。
+
+### 🚫 **環境変数化対応不要の判定**
+
+以下の環境変数は検討の結果、環境変数化を行わないことに決定：
+
+#### **FASTAPI_HOST/FASTAPI_PORT (app/main.py)**
+- **判定理由**: 開発環境では固定値（0.0.0.0:8000）が適切
+- **本番環境**: uvicornコマンドライン引数で直接指定
+- **Docker環境**: compose.yamlでポートマッピング管理
+- **FastAPI公式**: 環境変数化推奨だが、プロジェクト特性上不要
+
+#### **DOCKER_EXPOSE_PORT (Dockerfile)**
+- **判定理由**: プロジェクト内で8000ポート統一
+- **管理方針**: compose.yamlでのポートマッピングで十分
+- **過度な抽象化回避**: 実際の変更需要が低い設定
+
+**この判定により、3項目の環境変数化タスクが完了扱いとなった。**
 
 ## 🔐 **JWT_SECRET_KEY必須環境変数化の実装**
 
