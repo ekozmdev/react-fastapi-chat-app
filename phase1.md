@@ -795,10 +795,11 @@ services:
   - ~~リスク: 認証迂回の重大なセキュリティリスク~~
   - **実装済み**: `validate_required_env()`で必須環境変数化、未設定時はアプリ起動停止
 
-- [ ] **JWT_ACCESS_TOKEN_EXPIRE_MINUTES**を環境変数化 (app/core/security.py)
-  - 現在: ハードコード `1440` (24時間)
-  - 対応: 環境別トークン有効期限設定
-  - 推奨: 本番環境では15分程度に短縮
+- [x] **JWT_ACCESS_TOKEN_EXPIRE_MINUTES**を環境変数化 (app/core/security.py)
+  - ~~現在: ハードコード `1440` (24時間)~~
+  - ~~対応: 環境別トークン有効期限設定~~
+  - ~~推奨: 本番環境では15分程度に短縮~~
+  - **実装済み**: `constants.py`でデフォルト値管理、`config.py`でint型変換、`security.py`でsettings使用
 
 - [ ] **CORS_ORIGINS**を環境変数化 (app/core/config.py)
   - 現在: 危険な設定 `["*"]`
