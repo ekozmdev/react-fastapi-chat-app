@@ -789,10 +789,11 @@ services:
 
 ### 🔥 最優先（セキュリティリスク） - 5項目
 
-- [ ] **JWT_SECRET_KEY**を環境変数化 (app/core/security.py)
-  - 現在: デフォルト値 `"your-secret-key-here"`
-  - 対応: 512bit以上の強力な秘密鍵設定
-  - リスク: 認証迂回の重大なセキュリティリスク
+- [x] **JWT_SECRET_KEY**を環境変数化 (app/core/security.py)
+  - ~~現在: デフォルト値 `"your-secret-key-here"`~~
+  - ~~対応: 512bit以上の強力な秘密鍵設定~~
+  - ~~リスク: 認証迂回の重大なセキュリティリスク~~
+  - **実装済み**: `validate_required_env()`で必須環境変数化、未設定時はアプリ起動停止
 
 - [ ] **JWT_ACCESS_TOKEN_EXPIRE_MINUTES**を環境変数化 (app/core/security.py)
   - 現在: ハードコード `1440` (24時間)
