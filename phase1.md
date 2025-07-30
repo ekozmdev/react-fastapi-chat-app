@@ -821,9 +821,10 @@ services:
 
 ### 🟡 高優先（運用性向上） - 9項目
 
-- [ ] **APP_TITLE**を環境変数化 (app/core/config.py)
-  - 現在: `"LLM Chat API"`
-  - 対応: 環境別API名の設定
+- [x] ~~**APP_TITLE**を環境変数化 (app/core/config.py)~~
+  - ~~現在: `"LLM Chat API"`~~
+  - ~~対応: 環境別API名の設定~~
+  - **実装済み**: `constants.py`でデフォルト値、`config.py`でオプショナル環境変数化、Docker環境対応
 
 - [x] ~~**FASTAPI_HOST**を環境変数化 (app/main.py)~~
   - ~~現在: `"0.0.0.0"`~~
