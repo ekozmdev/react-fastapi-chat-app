@@ -13,7 +13,7 @@ from ..models import User
 
 # JWT設定（環境変数から取得、JWT_SECRET_KEYは必須）
 JWT_SECRET_KEY = settings.JWT_SECRET_KEY
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_ALGORITHM = "HS256"
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
     os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
 )
