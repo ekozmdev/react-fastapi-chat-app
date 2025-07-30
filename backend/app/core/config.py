@@ -4,6 +4,8 @@ import os
 
 from dotenv import find_dotenv, load_dotenv
 
+from .constants import DEFAULT_OPENAI_MODEL, DEFAULT_DATABASE_URL
+
 # 環境変数を読み込み（プロジェクトルートの.envを自動検出）
 dotenv_path = find_dotenv()
 print(f"[CONFIG] Loading .env from: {dotenv_path}")
@@ -19,9 +21,10 @@ class Settings:
 
     # OpenAI設定
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
 
     # データベース設定
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 
     # CORS設定
     CORS_ORIGINS: list[str] = ["*"]  # 本番環境では適切に制限する

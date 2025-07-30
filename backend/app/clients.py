@@ -30,7 +30,7 @@ class APIClients:
             必要に応じてツールを使用してください。
             時刻の取得や計算が必要な場合は、適切なツールを使用してください。
             回答は常にユーザーの言語で行ってください。""",
-            model="gpt-4o",
+            model=settings.OPENAI_MODEL,
             model_settings=ModelSettings(
                 max_tokens=1024,
                 temperature=0.7,

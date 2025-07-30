@@ -780,3 +780,199 @@ services:
 5. 🟡 **Nginx Template**: envsubst対応実装
 
 **結論**: 現在の実装は2025年セキュリティ基準に照らすと**複数の重大な脆弱性**を含んでいます。特に**JWT認証、CORS設定、機密情報管理**の即座修正が必要です。Docker Secrets の採用により、真のゼロトラスト環境を実現できます。
+
+---
+
+## 🎯 Phase 1 実装TODOリスト
+
+以下の25項目の環境変数化を優先度順に実装します。各項目は個別のタスクとして管理し、段階的な実装を行います。
+
+### 🔥 最優先（セキュリティリスク） - 5項目
+
+- [ ] **JWT_SECRET_KEY**を環境変数化 (app/core/security.py)
+  - 現在: デフォルト値 `"your-secret-key-here"`
+  - 対応: 512bit以上の強力な秘密鍵設定
+  - リスク: 認証迂回の重大なセキュリティリスク
+
+- [ ] **JWT_ACCESS_TOKEN_EXPIRE_MINUTES**を環境変数化 (app/core/security.py)
+  - 現在: ハードコード `1440` (24時間)
+  - 対応: 環境別トークン有効期限設定
+  - 推奨: 本番環境では15分程度に短縮
+
+- [ ] **CORS_ORIGINS**を環境変数化 (app/core/config.py)
+  - 現在: 危険な設定 `["*"]`
+  - 対応: 具体的ドメイン列挙
+  - リスク: 全オリジン許可は本番環境で危険
+
+- [ ] **CORS_ALLOW_CREDENTIALS**を環境変数化 (app/core/config.py)
+  - 現在: ハードコード `True`
+  - 対応: 認証情報送信可否の制御
+  - 注意: `origins=["*"]`との組み合わせは無効
+
+- [ ] **CORS_ALLOW_METHODS**を環境変数化 (app/core/config.py)
+  - 現在: 危険な設定 `["*"]`
+  - 対応: 許可HTTPメソッドの明示的制限
+  - 推奨: `["GET", "POST", "PUT", "DELETE"]`
+
+### 🟡 高優先（運用性向上） - 9項目
+
+- [ ] **APP_TITLE**を環境変数化 (app/core/config.py)
+  - 現在: `"LLM Chat API"`
+  - 対応: 環境別API名の設定
+
+- [ ] **FASTAPI_HOST**を環境変数化 (app/main.py)
+  - 現在: `"0.0.0.0"`
+  - 対応: ホストバインドアドレスの設定
+
+- [ ] **FASTAPI_PORT**を環境変数化 (app/main.py)
+  - 現在: `8000`
+  - 対応: ポート番号の環境別設定
+
+- [x] **OPENAI_MODEL**を環境変数化 (app/clients.py)
+  - 現在: `"gpt-4o"`
+  - 対応: モデル選択の柔軟性
+
+- [ ] **OPENAI_MAX_TOKENS**を環境変数化 (app/clients.py)
+  - 現在: `1024`
+  - 対応: トークン数制限の調整
+
+- [ ] **OPENAI_TEMPERATURE**を環境変数化 (app/clients.py)
+  - 現在: `0.7`
+  - 対応: 応答の創造性レベル調整
+  - 推奨: 事実確認用途では `0.0`
+
+- [ ] **DATABASE_URL_FALLBACK**を環境変数化 (app/db/session.py)
+  - 現在: ハードコードされたフォールバック値
+  - 対応: デフォルトDB接続先の明示的設定
+
+- [ ] **POSTGRES_USER**を環境変数化 (compose.yaml)
+  - 現在: `chatuser`
+  - 対応: DB認証情報の分離
+
+- [ ] **POSTGRES_PASSWORD**を環境変数化 (compose.yaml)
+  - 現在: `chatpassword`
+  - 対応: DB認証情報の分離
+  - 推奨: Docker Secretsの使用
+
+### 🟢 中優先（設定統一・保守性向上） - 9項目
+
+- [ ] **POSTGRES_DB**を環境変数化 (compose.yaml)
+  - 現在: `chatdb`
+  - 対応: DB名の環境別設定
+
+- [ ] **POSTGRES_PORT**を環境変数化 (compose.yaml)
+  - 現在: `5432`
+  - 対応: ポート競合回避
+
+- [ ] **NGINX_PORT**を環境変数化 (compose.yaml)
+  - 現在: `80`
+  - 対応: ポート競合回避
+
+- [ ] **NGINX_LISTEN_PORT**を環境変数化 (nginx.conf)
+  - 現在: `80`
+  - 対応: Nginx内部リッスンポート設定
+
+- [ ] **NGINX_FASTAPI_PORT**を環境変数化 (nginx.conf)
+  - 現在: `8000`
+  - 対応: NginxからFastAPIへのプロキシポート
+
+- [ ] **NGINX_PROXY_TIMEOUT**を環境変数化 (nginx.conf)
+  - 現在: `86400`
+  - 対応: プロキシタイムアウト制御
+
+- [ ] **DOCKER_EXPOSE_PORT**を環境変数化 (Dockerfile)
+  - 現在: `8000`
+  - 対応: コンテナネットワーク設定
+
+- [ ] **ALEMBIC_DATABASE_URL**を環境変数化 (alembic.ini)
+  - 現在: ハードコードされたDB URL
+  - 対応: マイグレーション用DB接続の分離
+
+- [ ] **MIN_PASSWORD_LENGTH**を環境変数化 (scripts/manage_users.py)
+  - 現在: `8`
+  - 対応: セキュリティポリシーの設定
+
+### 🔧 低優先（特殊用途・デバッグ） - 2項目
+
+- [ ] **APP_VERSION**を環境変数化 (app/core/config.py)
+  - 現在: `"0.2.0"`
+  - 対応: CI/CDでの自動バージョン設定
+
+- [ ] **TOOL_EXECUTION_DELAY**を環境変数化 (app/tools.py)
+  - 現在: `time.sleep(5)`
+  - 対応: デバッグ用遅延時間の調整
+
+---
+
+### 📊 実装進捗管理
+
+**合計**: 25項目
+- 🔥 **最優先**: 5項目（セキュリティリスク）
+- 🟡 **高優先**: 9項目（運用性向上）
+- 🟢 **中優先**: 9項目（設定統一）
+- 🔧 **低優先**: 2項目（特殊用途）
+
+### 🚀 次のステップ
+
+1. **Phase 1.1**: 最優先5項目の緊急対応（セキュリティリスク解決）
+2. **Phase 1.2**: 高優先9項目の実装（運用性向上）
+3. **Phase 1.3**: 中優先9項目の実装（設定統一）
+4. **Phase 1.4**: 低優先2項目の実装（完全性向上）
+
+各段階完了後に動作確認とテストを実施し、品質を確保しながら段階的に進めます。
+
+---
+
+## 💡 実装中に得た教訓・学び
+
+### 🔍 **環境変数デフォルト値処理での学び（OPENAI_MODEL実装時）**
+
+#### **問題**: `or`演算子 vs `os.getenv(key, default)`の選択ミス
+
+**発生した状況**:
+DATABASE_URLの環境変数化実装時に、以下の2つのパターンで迷いが生じた：
+
+```python
+# パターン1: or演算子（一時的に採用してしまった）
+DATABASE_URL: str = os.getenv("DATABASE_URL") or DEFAULT_DATABASE_URL
+
+# パターン2: os.getenv標準パターン（正解）
+DATABASE_URL: str = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+```
+
+#### **原因分析**:
+
+| 原因 | 詳細 | 影響度 |
+|------|------|--------|
+| **既存コードへの過度な配慮** | session.pyの`if settings.DATABASE_URL`パターンに影響を受けた | 🔴 高 |
+| **一貫性への注意不足** | 既存のOPENAI_MODELパターンを見落とした | 🔴 高 |
+| **設計判断の曖昧さ** | 空文字列を「未設定」として扱うべきか判断が曖昧だった | 🟡 中 |
+
+#### **重要な学び**:
+
+1. **一貫性を最優先にする**
+   ```python
+   # ✅ 既存パターンと統一（推奨）
+   OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+   DATABASE_URL: str = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+   
+   # ❌ 異なるパターンの混在（混乱の元）
+   OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+   DATABASE_URL: str = os.getenv("DATABASE_URL") or DEFAULT_DATABASE_URL
+   ```
+
+2. **Pythonの標準パターンを尊重する**
+   - `os.getenv(key, default)`はPython標準ライブラリの推奨パターン
+   - 予期しない動作（空文字列の扱い等）を避けられる
+   - チーム開発時の認知負荷が少ない
+
+3. **既存コードに引っ張られすぎない**
+   - 既存コードの設計が最適とは限らない
+   - 新しい実装では一貫性のある設計を優先する
+   - レガシーコードのパターンを無批判に踏襲しない
+
+#### **設計指針**:
+- **空文字列の扱い**: 通常は有効な値として扱い、デフォルト値は環境変数未設定時のみ使用
+- **特殊要件**: 空文字列もデフォルト値にフォールバックさせたい場合は、明示的に設計判断として文書化する
+
+この経験により、環境変数化の統一パターンとして**`os.getenv(key, default)`を標準採用**することが確定した。
