@@ -835,14 +835,16 @@ services:
   - 現在: `"gpt-4o"`
   - 対応: モデル選択の柔軟性
 
-- [ ] **OPENAI_MAX_TOKENS**を環境変数化 (app/clients.py)
-  - 現在: `1024`
-  - 対応: トークン数制限の調整
+- [x] **OPENAI_MAX_TOKENS**を環境変数化 (app/clients.py)
+  - ~~現在: `1024`~~
+  - ~~対応: トークン数制限の調整~~
+  - **実装済み**: `constants.py`でデフォルト値管理、`config.py`でint型変換、`clients.py`でsettings使用
 
-- [ ] **OPENAI_TEMPERATURE**を環境変数化 (app/clients.py)
-  - 現在: `0.7`
-  - 対応: 応答の創造性レベル調整
-  - 推奨: 事実確認用途では `0.0`
+- [x] **OPENAI_TEMPERATURE**を環境変数化 (app/clients.py)
+  - ~~現在: `0.7`~~
+  - ~~対応: 応答の創造性レベル調整~~
+  - ~~推奨: 事実確認用途では `0.0`~~
+  - **実装済み**: `constants.py`でデフォルト値管理、`config.py`でfloat型変換、`clients.py`でsettings使用
 
 - [x] ~~**DATABASE_URL_FALLBACK**を環境変数化 (app/db/session.py)~~
   - ~~現在: ハードコードされたフォールバック値~~
@@ -1051,9 +1053,11 @@ environment:
 
 | 環境変数 | デフォルト値（constants.py） | 設定場所 |
 |---------|---------------------------|---------|
-| `OPENAI_MODEL` | `"gpt-4o"` | `config.py:36` |
-| `DATABASE_URL` | `"postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"` | `config.py:40` |
-| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | `config.py:44` |
+| `OPENAI_MODEL` | `"gpt-4o"` | `config.py:48` |
+| `OPENAI_MAX_TOKENS` | `1024` | `config.py:49` |
+| `OPENAI_TEMPERATURE` | `0.7` | `config.py:50` |
+| `DATABASE_URL` | `"postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"` | `config.py:53` |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | `config.py:56` |
 
 **従来の`DATABASE_URL_FALLBACK`は不要** - constants.pyパターンにより、環境変数未設定時は自動的にデフォルト値が使用される設計に統一。
 
