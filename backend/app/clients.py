@@ -32,8 +32,8 @@ class APIClients:
             回答は常にユーザーの言語で行ってください。""",
             model=settings.OPENAI_MODEL,
             model_settings=ModelSettings(
-                max_tokens=1024,
-                temperature=0.7,
+                max_tokens=settings.OPENAI_MAX_TOKENS,
+                temperature=settings.OPENAI_TEMPERATURE,
             ),
             tools=AVAILABLE_TOOLS,
         )

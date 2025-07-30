@@ -8,7 +8,9 @@ from dotenv import find_dotenv, load_dotenv
 from .constants import (
     DEFAULT_DATABASE_URL,
     DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
+    DEFAULT_OPENAI_MAX_TOKENS,
     DEFAULT_OPENAI_MODEL,
+    DEFAULT_OPENAI_TEMPERATURE,
 )
 
 # 環境変数を読み込み（プロジェクトルートの.envを自動検出）
@@ -43,7 +45,9 @@ class Settings:
 
     # OpenAI設定
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+    OPENAI_MODEL: str = validate_optional_env("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+    OPENAI_MAX_TOKENS: int = int(validate_optional_env("OPENAI_MAX_TOKENS", str(DEFAULT_OPENAI_MAX_TOKENS)))
+    OPENAI_TEMPERATURE: float = float(validate_optional_env("OPENAI_TEMPERATURE", str(DEFAULT_OPENAI_TEMPERATURE)))
 
     # データベース設定
     DATABASE_URL: str = validate_optional_env("DATABASE_URL", DEFAULT_DATABASE_URL)
