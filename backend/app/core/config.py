@@ -12,6 +12,19 @@ print(f"[CONFIG] Loading .env from: {dotenv_path}")
 load_dotenv(dotenv_path)
 
 
+def validate_required_env(key: str) -> str:
+    """必須環境変数を検証・取得（未設定時はValueErrorを発生）"""
+    value = os.getenv(key)
+    if not value:
+        raise ValueError(f"{key} environment variable is required")
+    return value
+
+
+def validate_optional_env(key: str, default: str) -> str:
+    """オプション環境変数を検証・取得（未設定時はデフォルト値を使用）"""
+    return os.getenv(key, default)
+
+
 class Settings:
     """アプリケーション設定クラス"""
 
@@ -24,7 +37,10 @@ class Settings:
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
 
     # データベース設定
-    DATABASE_URL: str = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    DATABASE_URL: str = validate_optional_env("DATABASE_URL", DEFAULT_DATABASE_URL)
+
+    # JWT認証設定
+    JWT_SECRET_KEY: str = validate_required_env("JWT_SECRET_KEY")
 
     # CORS設定
     CORS_ORIGINS: list[str] = ["*"]  # 本番環境では適切に制限する

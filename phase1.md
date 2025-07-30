@@ -1030,3 +1030,78 @@ model=settings.OPENAI_MODEL
 | `DATABASE_URL` | `"postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"` | `config.py:27` |
 
 **従来の`DATABASE_URL_FALLBACK`は不要** - constants.pyパターンにより、環境変数未設定時は自動的にデフォルト値が使用される設計に統一。
+
+## 🔐 **JWT_SECRET_KEY必須環境変数化の実装**
+
+セキュリティ上重要なJWT_SECRET_KEYを必須環境変数として実装。未設定時はアプリケーション起動を停止。
+
+### **実装概要**
+
+#### **1. 必須環境変数チェック関数の追加**
+```python
+# app/core/config.py
+def validate_required_env(key: str) -> str:
+    """必須環境変数を検証・取得（未設定時はValueErrorを発生）"""
+    value = os.getenv(key)
+    if not value:
+        raise ValueError(f"{key} environment variable is required")
+    return value
+
+def validate_optional_env(key: str, default: str) -> str:
+    """オプション環境変数を検証・取得（未設定時はデフォルト値を使用）"""
+    return os.getenv(key, default)
+```
+
+#### **2. JWT_SECRET_KEYの必須化**
+```python
+# app/core/config.py - Settings class
+JWT_SECRET_KEY: str = validate_required_env("JWT_SECRET_KEY")
+```
+
+#### **3. security.pyの修正**
+```python
+# app/core/security.py
+from .config import settings
+
+JWT_SECRET_KEY = settings.JWT_SECRET_KEY  # 必須環境変数から取得
+```
+
+### **🔑 強力なJWTシークレットキー生成方法**
+
+#### **方法1: Python secretsモジュール使用（推奨）**
+```bash
+# 512bit（64文字）の暗号学的に安全なランダムキー生成
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+
+# 出力例:
+# P9EIUv7pGSL2ymBWXMNl5XGmmNmzxhdDRFpfo6t7RMbojvG9fV4xaWQyywRPZL5iiNU_6-_q9zFsJ5wAurJKfw
+```
+
+#### **方法2: OpenSSLコマンド使用**
+```bash
+# 512bit（64バイト）のランダムキー生成
+openssl rand -base64 64
+
+# hex形式での生成
+openssl rand -hex 32
+```
+
+#### **方法3: Pythonワンライナー（開発用）**
+```bash
+python3 -c "import os; print(os.urandom(64).hex())"
+```
+
+### **🛡️ セキュリティ要件**
+
+| 要件 | 推奨値 | 理由 |
+|------|--------|------|
+| **最小長** | 512bit (64文字) | JWT標準推奨、ブルートフォース攻撃耐性 |
+| **文字種** | Base64/URL-safe文字 | 環境変数での安全な使用 |
+| **生成方法** | 暗号学的乱数生成器 | 予測不可能性の確保 |
+| **環境別** | 環境ごとに異なるキー | 環境間での認証分離 |
+
+### **⚠️ セキュリティリスク**
+
+- **未設定時**: アプリケーション起動停止により事故防止
+- **弱いキー使用時**: JWT偽造による認証迂回の重大リスク
+- **キー漏洩時**: 全ユーザーセッションの無効化が必要
