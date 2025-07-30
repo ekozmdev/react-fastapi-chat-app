@@ -1024,6 +1024,27 @@ model=settings.OPENAI_MODEL
 - ✅ FastAPIコミュニティ標準に準拠
 - ✅ 今後の環境変数追加時の一貫性確保
 
+### ⚠️ **重要: 環境変数追加時のcompose.yaml更新**
+
+**環境変数を新規追加する際は、必ずcompose.yamlも更新すること**
+
+```yaml
+# compose.yaml - fastapiサービスのenvironmentセクション
+environment:
+  DATABASE_URL: ${DATABASE_URL}
+  OPENAI_API_KEY: ${OPENAI_API_KEY}
+  OPENAI_MODEL: ${OPENAI_MODEL}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES}
+  # ← 新しい環境変数はここに追加
+```
+
+**理由**: Docker環境では2段階設定が必要
+1. `.env`ファイルからDocker Compose変数置換
+2. `environment`セクションで明示的にコンテナに変数を渡す
+
+**忘れた場合の症状**: Docker環境でのみ環境変数が反映されず、デフォルト値が使用される
+
 ### 📝 **実装済み環境変数一覧**
 
 現在このパターンで実装済みの環境変数：
