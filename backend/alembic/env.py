@@ -11,6 +11,7 @@ from alembic import context
 sys.path.append(str(Path(__file__).parent.parent))
 
 # app.mainからモデルをインポート
+from app.core.constants import DEFAULT_DATABASE_URL
 from app.models import Base
 
 # this is the Alembic Config object, which provides
@@ -18,9 +19,7 @@ from app.models import Base
 config = context.config
 
 # 環境変数からDATABASE_URLを取得
-database_url = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
-)
+database_url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.

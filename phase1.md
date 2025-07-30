@@ -896,9 +896,10 @@ services:
   - ~~対応: コンテナネットワーク設定~~
   - **対応不要**: プロジェクト内で8000ポート統一、compose.yamlでポートマッピング管理
 
-- [ ] **ALEMBIC_DATABASE_URL**を環境変数化 (alembic.ini)
-  - 現在: ハードコードされたDB URL
-  - 対応: マイグレーション用DB接続の分離
+- [x] ~~**ALEMBIC_DATABASE_URL**を環境変数化 (alembic.ini)~~
+  - ~~現在: ハードコードされたDB URL~~
+  - ~~対応: マイグレーション用DB接続の分離~~
+  - **実装済み**: `alembic/env.py`でDATABASE_URL環境変数使用、constants.pyからデフォルト値取得で一元管理
 
 - [x] ~~**MIN_PASSWORD_LENGTH**を環境変数化 (scripts/manage_users.py)~~
   - ~~現在: `8`~~
@@ -912,9 +913,10 @@ services:
   - ~~対応: CI/CDでの自動バージョン設定~~
   - **対応不要**: FastAPIデフォルト値（"0.1.0"）使用に変更、APP_VERSION設定を削除
 
-- [ ] **TOOL_EXECUTION_DELAY**を環境変数化 (app/tools.py)
-  - 現在: `time.sleep(5)`
-  - 対応: デバッグ用遅延時間の調整
+- [x] ~~**TOOL_EXECUTION_DELAY**を環境変数化 (app/tools.py)~~
+  - ~~現在: `time.sleep(5)`~~
+  - ~~対応: デバッグ用遅延時間の調整~~
+  - **対応不要**: テスト用遅延時間のためハードコーディング維持
 
 ---
 
