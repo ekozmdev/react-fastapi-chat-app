@@ -44,7 +44,7 @@ class Settings:
     APP_VERSION: str = "0.2.0"
 
     # OpenAI設定
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_API_KEY: str = validate_required_env("OPENAI_API_KEY")
     OPENAI_MODEL: str = validate_optional_env("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
     OPENAI_MAX_TOKENS: int = int(validate_optional_env("OPENAI_MAX_TOKENS", str(DEFAULT_OPENAI_MAX_TOKENS)))
     OPENAI_TEMPERATURE: float = float(validate_optional_env("OPENAI_TEMPERATURE", str(DEFAULT_OPENAI_TEMPERATURE)))
