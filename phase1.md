@@ -907,9 +907,10 @@ services:
 
 ### 🔧 低優先（特殊用途・デバッグ） - 2項目
 
-- [ ] **APP_VERSION**を環境変数化 (app/core/config.py)
-  - 現在: `"0.2.0"`
-  - 対応: CI/CDでの自動バージョン設定
+- [x] ~~**APP_VERSION**を環境変数化 (app/core/config.py)~~
+  - ~~現在: `"0.2.0"`~~
+  - ~~対応: CI/CDでの自動バージョン設定~~
+  - **対応不要**: FastAPIデフォルト値（"0.1.0"）使用に変更、APP_VERSION設定を削除
 
 - [ ] **TOOL_EXECUTION_DELAY**を環境変数化 (app/tools.py)
   - 現在: `time.sleep(5)`

@@ -55,7 +55,6 @@ class Settings:
 
     # アプリケーション基本設定
     APP_TITLE: str = validate_optional_env("APP_TITLE", DEFAULT_APP_TITLE)
-    APP_VERSION: str = "0.2.0"
 
     # OpenAI設定
     OPENAI_API_KEY: str = validate_required_env("OPENAI_API_KEY")
