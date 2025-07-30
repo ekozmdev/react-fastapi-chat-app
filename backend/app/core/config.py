@@ -6,6 +6,7 @@ import os
 from dotenv import find_dotenv, load_dotenv
 
 from .constants import (
+    DEFAULT_APP_TITLE,
     DEFAULT_CORS_ALLOW_CREDENTIALS,
     DEFAULT_CORS_ALLOW_METHODS,
     DEFAULT_CORS_ORIGINS,
@@ -53,7 +54,7 @@ class Settings:
     """アプリケーション設定クラス"""
 
     # アプリケーション基本設定
-    APP_TITLE: str = "LLM Chat API"
+    APP_TITLE: str = validate_optional_env("APP_TITLE", DEFAULT_APP_TITLE)
     APP_VERSION: str = "0.2.0"
 
     # OpenAI設定

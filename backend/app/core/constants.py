@@ -16,5 +16,8 @@ DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://localhost:80"  # カンマ�
 DEFAULT_CORS_ALLOW_CREDENTIALS = "true"
 DEFAULT_CORS_ALLOW_METHODS = "GET,POST,PUT,DELETE"  # カンマ区切り文字列
 
+# アプリケーション設定のデフォルト値
+DEFAULT_APP_TITLE = "LLM Chat API"
+
 # セキュリティ設定のデフォルト値
 MIN_PASSWORD_LENGTH = 8  # パスワード最小文字数
