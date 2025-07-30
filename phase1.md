@@ -976,3 +976,45 @@ DATABASE_URL: str = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 - **特殊要件**: 空文字列もデフォルト値にフォールバックさせたい場合は、明示的に設計判断として文書化する
 
 この経験により、環境変数化の統一パターンとして**`os.getenv(key, default)`を標準採用**することが確定した。
+
+### 📋 **環境変数化の標準実装パターン**
+
+今回の実装で確立されたベストプラクティス：
+
+#### **1. constants.pyでデフォルト値定義**
+```python
+# app/core/constants.py
+"""アプリケーション定数定義"""
+
+# OpenAI設定のデフォルト値
+DEFAULT_OPENAI_MODEL = "gpt-4o"
+
+# データベース設定のデフォルト値
+DEFAULT_DATABASE_URL = "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
+```
+
+#### **2. config.pyで環境変数読み込み**
+```python
+# app/core/config.py
+from .constants import DEFAULT_OPENAI_MODEL, DEFAULT_DATABASE_URL
+
+class Settings:
+    # 統一パターン: os.getenv(key, default)
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+    DATABASE_URL: str = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+```
+
+#### **3. アプリケーションコードで使用**
+```python
+# app/clients.py
+from .core.config import settings
+
+# 環境変数またはデフォルト値を自動選択
+model=settings.OPENAI_MODEL
+```
+
+**このパターンのメリット**:
+- ✅ デフォルト値の一元管理（constants.py）
+- ✅ 環境変数未設定時の安全なフォールバック
+- ✅ FastAPIコミュニティ標準に準拠
+- ✅ 今後の環境変数追加時の一貫性確保
