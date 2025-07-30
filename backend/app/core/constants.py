@@ -10,3 +10,8 @@ DEFAULT_DATABASE_URL = "postgresql+psycopg://chatuser:chatpassword@localhost:543
 
 # JWT認証設定のデフォルト値
 DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24時間
+
+# CORS設定のデフォルト値
+DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://localhost:80"  # カンマ区切り文字列
+DEFAULT_CORS_ALLOW_CREDENTIALS = "true"
+DEFAULT_CORS_ALLOW_METHODS = "GET,POST,PUT,DELETE"  # カンマ区切り文字列

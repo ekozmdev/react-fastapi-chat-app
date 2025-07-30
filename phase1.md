@@ -801,20 +801,23 @@ services:
   - ~~推奨: 本番環境では15分程度に短縮~~
   - **実装済み**: `constants.py`でデフォルト値管理、`config.py`でint型変換、`security.py`でsettings使用
 
-- [ ] **CORS_ORIGINS**を環境変数化 (app/core/config.py)
-  - 現在: 危険な設定 `["*"]`
-  - 対応: 具体的ドメイン列挙
-  - リスク: 全オリジン許可は本番環境で危険
+- [x] ~~**CORS_ORIGINS**を環境変数化 (app/core/config.py)~~
+  - ~~現在: 危険な設定 `["*"]`~~
+  - ~~対応: 具体的ドメイン列挙~~
+  - ~~リスク: 全オリジン許可は本番環境で危険~~
+  - **実装済み**: `constants.py`でセキュアなデフォルト値、`config.py`でカンマ区切りリスト解析、`main.py`で適用
 
-- [ ] **CORS_ALLOW_CREDENTIALS**を環境変数化 (app/core/config.py)
-  - 現在: ハードコード `True`
-  - 対応: 認証情報送信可否の制御
-  - 注意: `origins=["*"]`との組み合わせは無効
+- [x] ~~**CORS_ALLOW_CREDENTIALS**を環境変数化 (app/core/config.py)~~
+  - ~~現在: ハードコード `True`~~
+  - ~~対応: 認証情報送信可否の制御~~
+  - ~~注意: `origins=["*"]`との組み合わせは無効~~
+  - **実装済み**: `constants.py`でデフォルト値、`config.py`でbool型解析、`main.py`で適用
 
-- [ ] **CORS_ALLOW_METHODS**を環境変数化 (app/core/config.py)
-  - 現在: 危険な設定 `["*"]`
-  - 対応: 許可HTTPメソッドの明示的制限
-  - 推奨: `["GET", "POST", "PUT", "DELETE"]`
+- [x] ~~**CORS_ALLOW_METHODS**を環境変数化 (app/core/config.py)~~
+  - ~~現在: 危険な設定 `["*"]`~~
+  - ~~対応: 許可HTTPメソッドの明示的制限~~
+  - ~~推奨: `["GET", "POST", "PUT", "DELETE"]`~~
+  - **実装済み**: `constants.py`でセキュアなデフォルト値、`config.py`でカンマ区切りリスト解析、`main.py`で適用
 
 ### 🟡 高優先（運用性向上） - 9項目
 

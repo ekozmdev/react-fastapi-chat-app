@@ -6,6 +6,9 @@ import os
 from dotenv import find_dotenv, load_dotenv
 
 from .constants import (
+    DEFAULT_CORS_ALLOW_CREDENTIALS,
+    DEFAULT_CORS_ALLOW_METHODS,
+    DEFAULT_CORS_ORIGINS,
     DEFAULT_DATABASE_URL,
     DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
     DEFAULT_OPENAI_MAX_TOKENS,
@@ -36,6 +39,16 @@ def validate_optional_env(key: str, default: str) -> str:
     return value
 
 
+def parse_comma_separated_list(value: str) -> list[str]:
+    """カンマ区切り文字列をリストに変換（空白も除去）"""
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def parse_bool(value: str) -> bool:
+    """文字列をboolに変換"""
+    return value.lower() in ("true", "1", "yes", "on")
+
+
 class Settings:
     """アプリケーション設定クラス"""
 
@@ -57,10 +70,10 @@ class Settings:
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(validate_optional_env("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", str(DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)))
 
     # CORS設定
-    CORS_ORIGINS: list[str] = ["*"]  # 本番環境では適切に制限する
-    CORS_ALLOW_CREDENTIALS: bool = True
-    CORS_ALLOW_METHODS: list[str] = ["*"]
-    CORS_ALLOW_HEADERS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = parse_comma_separated_list(validate_optional_env("CORS_ORIGINS", DEFAULT_CORS_ORIGINS))
+    CORS_ALLOW_CREDENTIALS: bool = parse_bool(validate_optional_env("CORS_ALLOW_CREDENTIALS", DEFAULT_CORS_ALLOW_CREDENTIALS))
+    CORS_ALLOW_METHODS: list[str] = parse_comma_separated_list(validate_optional_env("CORS_ALLOW_METHODS", DEFAULT_CORS_ALLOW_METHODS))
+    CORS_ALLOW_HEADERS: list[str] = ["*"]  # ヘッダーは現状維持
 
 
 # グローバル設定インスタンス
