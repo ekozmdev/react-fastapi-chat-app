@@ -1,5 +1,6 @@
 """アプリケーション設定管理"""
 
+import logging
 import os
 
 from dotenv import find_dotenv, load_dotenv
@@ -25,8 +26,12 @@ def validate_required_env(key: str) -> str:
 
 
 def validate_optional_env(key: str, default: str) -> str:
-    """オプション環境変数を検証・取得（未設定時はデフォルト値を使用）"""
-    return os.getenv(key, default)
+    """オプション環境変数を検証・取得（未設定時はデフォルト値を使用、デフォルト値使用時はワーニング出力）"""
+    value = os.getenv(key)
+    if not value:
+        logging.warning(f"[CONFIG] {key} is using default value. Consider setting a custom value for production.")
+        return default
+    return value
 
 
 class Settings:
