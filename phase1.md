@@ -81,7 +81,7 @@
 
 | 推奨環境変数名 | 理由 |
 |--------------|------|
-| `DATABASE_URL_FALLBACK` | デフォルトDB接続先の明示的設定 |
+| ~~`DATABASE_URL_FALLBACK`~~ | ~~デフォルトDB接続先の明示的設定~~ **→ constants.pyパターンで実装済み** |
 
 ## 🟢 低優先（特殊用途・デバッグ）
 
@@ -141,7 +141,7 @@
 1. Docker環境の完全な環境変数化（`DOCKER_EXPOSE_PORT`等）
 2. Nginx設定の環境変数化（`NGINX_PORT`, `NGINX_LISTEN_PORT`, `NGINX_FASTAPI_PORT`, `NGINX_PROXY_TIMEOUT`）
 3. Alembic設定の分離（`ALEMBIC_DATABASE_URL`）
-4. データベースフォールバック設定の明示化（`DATABASE_URL_FALLBACK`）
+4. ~~データベースフォールバック設定の明示化（`DATABASE_URL_FALLBACK`）~~ **→ constants.pyパターンで実装済み**
 5. PostgreSQL設定の統一（`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`）
 
 ## 推奨.envファイル例
@@ -169,7 +169,7 @@ OPENAI_TEMPERATURE=0.7
 
 # データベース設定
 DATABASE_URL=postgresql+psycopg://user:password@host:port/dbname
-DATABASE_URL_FALLBACK=postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb
+# DATABASE_URL_FALLBACK は不要（constants.pyのDEFAULT_DATABASE_URLで管理）
 
 # PostgreSQL（Docker）
 POSTGRES_USER=chatuser
@@ -344,7 +344,7 @@ class Settings:
 | 🟡 | `FASTAPI_HOST` | `0.0.0.0` | FastAPIサーバーのバインドホスト。セキュリティ・アクセス制御 |
 | 🟡 | `FASTAPI_PORT` | `8000` | FastAPIサーバーのポート番号。環境別ポート競合回避 |
 | 🟡 | `APP_TITLE` | `LLM Chat API` | API仕様書に表示されるアプリケーション名 |
-| 🟢 | `DATABASE_URL_FALLBACK` | `postgresql+psycopg://chatuser:chatpass@localhost:5432/chatdb` | DB接続失敗時のフォールバック先。現在ハードコード |
+| ✅ | ~~`DATABASE_URL_FALLBACK`~~ | ~~`postgresql+psycopg://chatuser:chatpass@localhost:5432/chatdb`~~ | **constants.pyパターンで実装済み** |
 | 🟢 | `POSTGRES_USER` | `chatuser` | PostgreSQLユーザー名（Docker環境） |
 | 🟢 | `POSTGRES_PASSWORD` | `secure-db-password` | PostgreSQLパスワード（Docker環境） |
 | 🟢 | `POSTGRES_DB` | `chatdb` | PostgreSQLデータベース名（Docker環境） |
@@ -841,9 +841,10 @@ services:
   - 対応: 応答の創造性レベル調整
   - 推奨: 事実確認用途では `0.0`
 
-- [ ] **DATABASE_URL_FALLBACK**を環境変数化 (app/db/session.py)
-  - 現在: ハードコードされたフォールバック値
-  - 対応: デフォルトDB接続先の明示的設定
+- [x] ~~**DATABASE_URL_FALLBACK**を環境変数化 (app/db/session.py)~~
+  - ~~現在: ハードコードされたフォールバック値~~
+  - ~~対応: デフォルトDB接続先の明示的設定~~
+  - **実装済み**: `constants.py`の`DEFAULT_DATABASE_URL`で管理、`config.py`で`os.getenv()`パターン適用
 
 - [ ] **POSTGRES_USER**を環境変数化 (compose.yaml)
   - 現在: `chatuser`
@@ -1018,3 +1019,14 @@ model=settings.OPENAI_MODEL
 - ✅ 環境変数未設定時の安全なフォールバック
 - ✅ FastAPIコミュニティ標準に準拠
 - ✅ 今後の環境変数追加時の一貫性確保
+
+### 📝 **実装済み環境変数一覧**
+
+現在このパターンで実装済みの環境変数：
+
+| 環境変数 | デフォルト値（constants.py） | 設定場所 |
+|---------|---------------------------|---------|
+| `OPENAI_MODEL` | `"gpt-4o"` | `config.py:24` |
+| `DATABASE_URL` | `"postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"` | `config.py:27` |
+
+**従来の`DATABASE_URL_FALLBACK`は不要** - constants.pyパターンにより、環境変数未設定時は自動的にデフォルト値が使用される設計に統一。
