@@ -26,6 +26,7 @@ from passlib.context import CryptContext
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.constants import MIN_PASSWORD_LENGTH
 from app.models import User
 
 # プロジェクトルートの.envファイルを自動検出して読み込み
@@ -58,7 +59,7 @@ def validate_email(email: str) -> bool:
 
 def validate_password(password: str) -> bool:
     """パスワード強度の検証"""
-    if len(password) < 8:
+    if len(password) < MIN_PASSWORD_LENGTH:
         return False
     if not any(c.isalpha() for c in password):
         return False
@@ -143,7 +144,7 @@ def register_user():  # noqa: C901
                 print("パスワードを入力してください。")
                 continue
             if not validate_password(password):
-                print("パスワードは8文字以上で、英字と数字を含む必要があります。")
+                print(f"パスワードは{MIN_PASSWORD_LENGTH}文字以上で、英字と数字を含む必要があります。")
                 continue
 
             password_confirm = getpass.getpass("パスワード（確認）: ")

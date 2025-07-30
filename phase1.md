@@ -899,9 +899,10 @@ services:
   - 現在: ハードコードされたDB URL
   - 対応: マイグレーション用DB接続の分離
 
-- [ ] **MIN_PASSWORD_LENGTH**を環境変数化 (scripts/manage_users.py)
-  - 現在: `8`
-  - 対応: セキュリティポリシーの設定
+- [x] ~~**MIN_PASSWORD_LENGTH**を環境変数化 (scripts/manage_users.py)~~
+  - ~~現在: `8`~~
+  - ~~対応: セキュリティポリシーの設定~~
+  - **実装済み**: `constants.py`で`MIN_PASSWORD_LENGTH = 8`定数定義、`manage_users.py`でインポート使用
 
 ### 🔧 低優先（特殊用途・デバッグ） - 2項目
 
