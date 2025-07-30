@@ -4,7 +4,11 @@ import os
 
 from dotenv import find_dotenv, load_dotenv
 
-from .constants import DEFAULT_OPENAI_MODEL, DEFAULT_DATABASE_URL
+from .constants import (
+    DEFAULT_DATABASE_URL,
+    DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
+    DEFAULT_OPENAI_MODEL,
+)
 
 # 環境変数を読み込み（プロジェクトルートの.envを自動検出）
 dotenv_path = find_dotenv()
@@ -41,6 +45,7 @@ class Settings:
 
     # JWT認証設定
     JWT_SECRET_KEY: str = validate_required_env("JWT_SECRET_KEY")
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(validate_optional_env("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", str(DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)))
 
     # CORS設定
     CORS_ORIGINS: list[str] = ["*"]  # 本番環境では適切に制限する
