@@ -856,24 +856,28 @@ services:
   - ~~対応: デフォルトDB接続先の明示的設定~~
   - **実装済み**: `constants.py`の`DEFAULT_DATABASE_URL`で管理、`config.py`で`os.getenv()`パターン適用
 
-- [ ] **POSTGRES_USER**を環境変数化 (compose.yaml)
-  - 現在: `chatuser`
-  - 対応: DB認証情報の分離
+- [x] **POSTGRES_USER**を環境変数化 (compose.yaml)
+  - ~~現在: `chatuser`~~
+  - ~~対応: DB認証情報の分離~~
+  - **実装済み**: Phase2で`POSTGRES_USER: ${DB_USER}`として実装完了
 
-- [ ] **POSTGRES_PASSWORD**を環境変数化 (compose.yaml)
-  - 現在: `chatpassword`
-  - 対応: DB認証情報の分離
-  - 推奨: Docker Secretsの使用
+- [x] **POSTGRES_PASSWORD**を環境変数化 (compose.yaml)
+  - ~~現在: `chatpassword`~~
+  - ~~対応: DB認証情報の分離~~
+  - ~~推奨: Docker Secretsの使用~~
+  - **実装済み**: Phase2で`POSTGRES_PASSWORD: ${DB_PASSWORD}`として実装完了
 
 ### 🟢 中優先（設定統一・保守性向上） - 9項目
 
-- [ ] **POSTGRES_DB**を環境変数化 (compose.yaml)
-  - 現在: `chatdb`
-  - 対応: DB名の環境別設定
+- [x] **POSTGRES_DB**を環境変数化 (compose.yaml)
+  - ~~現在: `chatdb`~~
+  - ~~対応: DB名の環境別設定~~
+  - **実装済み**: Phase2で`POSTGRES_DB: ${DB_NAME}`として実装完了
 
-- [ ] **POSTGRES_PORT**を環境変数化 (compose.yaml)
-  - 現在: `5432`
-  - 対応: ポート競合回避
+- [x] **POSTGRES_PORT**を環境変数化 (compose.yaml)
+  - ~~現在: `5432`~~
+  - ~~対応: ポート競合回避~~
+  - **実装済み**: compose.yamlで`ports: - "${DB_PORT}:5432"`として実装完了
 
 - [ ] **NGINX_PORT**を環境変数化 (compose.yaml)
   - 現在: `80`
