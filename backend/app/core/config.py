@@ -10,7 +10,6 @@ from .constants import (
     DEFAULT_CORS_ALLOW_CREDENTIALS,
     DEFAULT_CORS_ALLOW_METHODS,
     DEFAULT_CORS_ORIGINS,
-    DEFAULT_DATABASE_URL,
     DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
     DEFAULT_OPENAI_MAX_TOKENS,
     DEFAULT_OPENAI_MODEL,
@@ -24,7 +23,7 @@ load_dotenv(dotenv_path)
 
 
 def validate_required_env(key: str) -> str:
-    """必須環境変数を検証・取得（未設定時はValueErrorを発生）"""
+    """必須環境変数を検証・取得"""
     value = os.getenv(key)
     if not value:
         raise ValueError(f"{key} environment variable is required")
@@ -62,8 +61,18 @@ class Settings:
     OPENAI_MAX_TOKENS: int = int(validate_optional_env("OPENAI_MAX_TOKENS", str(DEFAULT_OPENAI_MAX_TOKENS)))
     OPENAI_TEMPERATURE: float = float(validate_optional_env("OPENAI_TEMPERATURE", str(DEFAULT_OPENAI_TEMPERATURE)))
 
-    # データベース設定
-    DATABASE_URL: str = validate_optional_env("DATABASE_URL", DEFAULT_DATABASE_URL)
+    # データベース設定（個別コンポーネント）
+    DB_PROTOCOL: str = validate_required_env("DB_PROTOCOL")
+    DB_HOST: str = validate_required_env("DB_HOST")
+    DB_PORT: int = int(validate_required_env("DB_PORT"))
+    DB_USER: str = validate_required_env("DB_USER")
+    DB_PASSWORD: str = validate_required_env("DB_PASSWORD")
+    DB_NAME: str = validate_required_env("DB_NAME")
+
+    @property
+    def DATABASE_URL(self) -> str:
+        """個別コンポーネントから動的にDATABASE_URLを構築"""
+        return f"{self.DB_PROTOCOL}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     # JWT認証設定
     JWT_SECRET_KEY: str = validate_required_env("JWT_SECRET_KEY")

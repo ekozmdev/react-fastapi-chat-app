@@ -26,18 +26,12 @@ from passlib.context import CryptContext
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.config import settings
 from app.core.constants import MIN_PASSWORD_LENGTH
 from app.models import User
 
-# プロジェクトルートの.envファイルを自動検出して読み込み
-dotenv_path = find_dotenv()
-print(f"[MANAGE_USERS] Loading .env from: {dotenv_path}")
-load_dotenv(dotenv_path)
-
 # データベース接続
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
-)
+DATABASE_URL = settings.DATABASE_URL
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
