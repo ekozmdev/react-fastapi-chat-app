@@ -11,17 +11,15 @@ from alembic import context
 sys.path.append(str(Path(__file__).parent.parent))
 
 # app.mainからモデルをインポート
+from app.core.config import settings
 from app.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# 環境変数からDATABASE_URLを取得
-database_url = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
-)
-config.set_main_option("sqlalchemy.url", database_url)
+# 設定からDATABASE_URLを取得
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

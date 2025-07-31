@@ -21,20 +21,17 @@ from pathlib import Path
 # プロジェクトのルートディレクトリをPythonパスに追加
 sys.path.append(str(Path(__file__).parent.parent))
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from passlib.context import CryptContext
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.config import settings
+from app.core.constants import MIN_PASSWORD_LENGTH
 from app.models import User
 
-# 環境変数を読み込み
-load_dotenv()
-
 # データベース接続
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb"
-)
+DATABASE_URL = settings.DATABASE_URL
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -56,7 +53,7 @@ def validate_email(email: str) -> bool:
 
 def validate_password(password: str) -> bool:
     """パスワード強度の検証"""
-    if len(password) < 8:
+    if len(password) < MIN_PASSWORD_LENGTH:
         return False
     if not any(c.isalpha() for c in password):
         return False
@@ -141,7 +138,7 @@ def register_user():  # noqa: C901
                 print("パスワードを入力してください。")
                 continue
             if not validate_password(password):
-                print("パスワードは8文字以上で、英字と数字を含む必要があります。")
+                print(f"パスワードは{MIN_PASSWORD_LENGTH}文字以上で、英字と数字を含む必要があります。")
                 continue
 
             password_confirm = getpass.getpass("パスワード（確認）: ")

@@ -4,15 +4,15 @@ services:
     image: postgres:16-alpine
     container_name: llm-chat-db
     environment:
-      POSTGRES_USER: chatuser
-      POSTGRES_PASSWORD: chatpassword
-      POSTGRES_DB: chatdb
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chatuser -d chatdb"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,10 +25,24 @@ services:
     container_name: llm-chat-backend
     ports:
       - "8000:8000"
-    env_file:
-      - ./backend/.env
     environment:
-      DATABASE_URL: postgresql+psycopg://chatuser:chatpassword@postgres:5432/chatdb
+      APP_TITLE: ${APP_TITLE}
+      # 個別データベースコンポーネント（コンテナ環境用）
+      DB_PROTOCOL: ${DB_PROTOCOL}
+      DB_HOST: postgres  # Dockerサービス名を直接指定
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS}
+      CORS_ALLOW_METHODS: ${CORS_ALLOW_METHODS}
     volumes:
       - ./backend:/app
     depends_on:

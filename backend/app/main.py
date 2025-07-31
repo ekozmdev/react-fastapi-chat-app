@@ -37,7 +37,7 @@ from .schemas import (
     UserUpdateRequest,
 )
 
-app = FastAPI(title=settings.APP_TITLE, version=settings.APP_VERSION, lifespan=lifespan)
+app = FastAPI(title=settings.APP_TITLE, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,6 +1,5 @@
 """認証・セキュリティ関連の機能"""
 
-import os
 from datetime import UTC, datetime, timedelta
 
 from fastapi.security import HTTPBearer
@@ -9,13 +8,12 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from ..models import User
+from .config import settings
 
-# JWT設定
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
-)
+# JWT設定（環境変数から取得、JWT_SECRET_KEYは必須）
+JWT_SECRET_KEY = settings.JWT_SECRET_KEY
+JWT_ALGORITHM = "HS256"
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 
 # パスワードハッシュ化
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

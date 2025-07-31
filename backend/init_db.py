@@ -6,20 +6,15 @@
 
 import os
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
+from app.core.config import settings
 from app.models import Base
-
-load_dotenv()
 
 
 def init_database():
     """データベースとテーブルを初期化"""
-    database_url = os.getenv(
-        "DATABASE_URL",
-        "postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb",
-    )
+    database_url = settings.DATABASE_URL
 
     print(f"Connecting to database: {database_url}")
     engine = create_engine(database_url)
