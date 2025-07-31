@@ -1,4 +1,4 @@
-# LLM Chat Application
+# React FastAPI Chat Application
 
 OpenAI GPT-4を使用したチャットアプリケーション。React + Viteフロントエンド、FastAPI + uvバックエンド、PostgreSQLデータベースで構成されています。
 
@@ -61,10 +61,11 @@ react-fastapi-chat-app/
 │   │   └── manage_users.py
 │   ├── pyproject.toml
 │   ├── alembic.ini
-│   ├── .env
 │   └── Dockerfile
 ├── nginx/
 │   └── nginx.conf
+├── .env
+├── .env.example
 ├── CLAUDE.md
 └── compose.yaml
 ```
@@ -87,14 +88,14 @@ react-fastapi-chat-app/
 
 ```bash
 git clone <repository-url>
-cd llm-chat-app
+cd react-fastapi-chat-app
 ```
 
 ### 2. 環境変数の設定
 
 ```bash
-# backend/.env.exampleをコピーして.envを作成
-cp backend/.env.example backend/.env
+# .env.exampleをコピーして.envを作成（プロジェクトルート）
+cp .env.example .env
 
 # .envファイルを編集してOPENAI_API_KEYを設定
 # OPENAI_API_KEY=sk-...
@@ -208,14 +209,14 @@ npm run check   # Biome check
 1. **ユーザー作成**: 管理スクリプトでユーザーを作成
    ```bash
    cd backend
-   uv run scripts/manage_users.py register
+   uv run python scripts/manage_users.py register
    ```
 
 2. **ログイン**: フロントエンドでメールアドレスとパスワードを入力
 
 3. **動作確認用アカウント**:
-   - メール: `admin@invalid.com`
-   - パスワード: `abcd1234`
+   - 初回セットアップ時に管理スクリプトで作成
+   - デフォルトでは作成されないため、手動で作成が必要
 
 ### 開発時の注意点
 
@@ -346,19 +347,19 @@ self.chat_agent = Agent(
 cd backend
 
 # ユーザー一覧表示
-uv run scripts/manage_users.py list
+uv run python scripts/manage_users.py list
 
 # 新規ユーザー登録（対話形式）
-uv run scripts/manage_users.py register
+uv run python scripts/manage_users.py register
 
 # ユーザー有効化
-uv run scripts/manage_users.py activate user@example.com
+uv run python scripts/manage_users.py activate user@example.com
 
 # ユーザー無効化
-uv run scripts/manage_users.py deactivate user@example.com
+uv run python scripts/manage_users.py deactivate user@example.com
 
 # ユーザー削除
-uv run scripts/manage_users.py delete user@example.com
+uv run python scripts/manage_users.py delete user@example.com
 ```
 
 ## uv コマンド
