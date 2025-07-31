@@ -356,3 +356,80 @@
 - python-multipart: セキュリティ更新を適用して保持
 
 この調査により、phase0で特定した項目の不要性が**業界標準・公式推奨事項**に合致することが確認されました。
+
+## 🔄 安全な削除作業のための戻り手順
+
+**🛡️ セーフティネット設定**
+
+### 現在の安全なコミット地点
+```bash
+# 調査完了時点（削除作業前）
+git log --oneline -1
+# 9540417 docs: Phase0包括的未使用コード調査完了 - Web・DeepWiki裏取り付き
+```
+
+### 削除作業中に問題が発生した場合の復旧手順
+
+#### 1. 即座に戻る（作業中断）
+```bash
+# 現在の変更を破棄して調査完了時点に戻る
+git reset --hard 9540417
+git clean -fd
+```
+
+#### 2. 特定コミットまで戻る（段階的復旧）
+```bash
+# 削除作業のコミット履歴を確認
+git log --oneline --graph
+
+# 問題のあるコミットを特定後、その直前まで戻る
+git reset --hard <safe_commit_hash>
+```
+
+#### 3. 選択的復元（部分的問題の場合）
+```bash
+# 特定ファイルのみ復元
+git checkout 9540417 -- path/to/problematic/file.py
+
+# 特定ディレクトリのみ復元  
+git checkout 9540417 -- backend/app/schemas/
+```
+
+### 削除作業の推奨アプローチ
+
+#### Phase A: 確実に安全な項目から削除
+1. **未使用import文** (5箇所) - リスク: 極低
+2. **未使用Pydanticスキーマ** (25行) - リスク: 極低
+
+#### Phase B: 大規模削除項目
+3. **DatabaseToolManagerクラス** (194行) - リスク: 低（参照確認済み）
+
+#### Phase C: 設定系項目
+4. **WebSocket設定コメントアウト** - リスク: 極低（保持）
+
+### 各Phase完了後の確認手順
+```bash
+# 1. Lint/Format確認
+cd backend && uv run ruff check && uv run ruff format
+cd frontend && npm run lint && npm run format
+
+# 2. 機能テスト
+# - FastAPI起動確認: uv run uvicorn app.main:app --reload
+# - フロントエンド起動確認: npm run dev  
+# - 基本機能動作確認: 認証・チャット・ツール実行
+
+# 3. 問題なければコミット、問題があれば即座に戻る
+git add . && git commit -m "feat: Phase A 未使用import削除完了"
+# または
+git reset --hard 9540417  # 問題発生時
+```
+
+### 🚨 緊急時の完全復旧コマンド
+```bash
+# 全ての変更を破棄して調査完了地点に戻る
+git reset --hard 9540417
+git clean -fd
+echo "✅ 調査完了時点（コミット9540417）に復旧完了"
+```
+
+**📝 作業ログ**: 各削除作業の前後でこのセクションに実行コマンドと結果をメモすることを推奨

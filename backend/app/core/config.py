@@ -34,7 +34,9 @@ def validate_optional_env(key: str, default: str) -> str:
     """オプション環境変数を検証・取得（未設定時はデフォルト値を使用、デフォルト値使用時はワーニング出力）"""
     value = os.getenv(key)
     if not value:
-        logging.warning(f"[CONFIG] {key} is using default value. Consider setting a custom value for production.")
+        logging.warning(
+            f"[CONFIG] {key} is using default value. Consider setting a custom value for production."
+        )
         return default
     return value
 
@@ -58,8 +60,12 @@ class Settings:
     # OpenAI設定
     OPENAI_API_KEY: str = validate_required_env("OPENAI_API_KEY")
     OPENAI_MODEL: str = validate_optional_env("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
-    OPENAI_MAX_TOKENS: int = int(validate_optional_env("OPENAI_MAX_TOKENS", str(DEFAULT_OPENAI_MAX_TOKENS)))
-    OPENAI_TEMPERATURE: float = float(validate_optional_env("OPENAI_TEMPERATURE", str(DEFAULT_OPENAI_TEMPERATURE)))
+    OPENAI_MAX_TOKENS: int = int(
+        validate_optional_env("OPENAI_MAX_TOKENS", str(DEFAULT_OPENAI_MAX_TOKENS))
+    )
+    OPENAI_TEMPERATURE: float = float(
+        validate_optional_env("OPENAI_TEMPERATURE", str(DEFAULT_OPENAI_TEMPERATURE))
+    )
 
     # データベース設定（個別コンポーネント）
     DB_PROTOCOL: str = validate_required_env("DB_PROTOCOL")
@@ -76,12 +82,23 @@ class Settings:
 
     # JWT認証設定
     JWT_SECRET_KEY: str = validate_required_env("JWT_SECRET_KEY")
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(validate_optional_env("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", str(DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)))
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
+        validate_optional_env(
+            "JWT_ACCESS_TOKEN_EXPIRE_MINUTES",
+            str(DEFAULT_JWT_ACCESS_TOKEN_EXPIRE_MINUTES),
+        )
+    )
 
     # CORS設定
-    CORS_ORIGINS: list[str] = parse_comma_separated_list(validate_optional_env("CORS_ORIGINS", DEFAULT_CORS_ORIGINS))
-    CORS_ALLOW_CREDENTIALS: bool = parse_bool(validate_optional_env("CORS_ALLOW_CREDENTIALS", DEFAULT_CORS_ALLOW_CREDENTIALS))
-    CORS_ALLOW_METHODS: list[str] = parse_comma_separated_list(validate_optional_env("CORS_ALLOW_METHODS", DEFAULT_CORS_ALLOW_METHODS))
+    CORS_ORIGINS: list[str] = parse_comma_separated_list(
+        validate_optional_env("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
+    )
+    CORS_ALLOW_CREDENTIALS: bool = parse_bool(
+        validate_optional_env("CORS_ALLOW_CREDENTIALS", DEFAULT_CORS_ALLOW_CREDENTIALS)
+    )
+    CORS_ALLOW_METHODS: list[str] = parse_comma_separated_list(
+        validate_optional_env("CORS_ALLOW_METHODS", DEFAULT_CORS_ALLOW_METHODS)
+    )
     CORS_ALLOW_HEADERS: list[str] = ["*"]  # ヘッダーは現状維持
 
 
