@@ -135,7 +135,14 @@ compose.yaml            # Docker Compose orchestration
 
 ### Required Environment Variables (in `/.env`)
 - `OPENAI_API_KEY`: OpenAI API key for GPT integration
-- `DATABASE_URL`: PostgreSQL connection string
+- `JWT_SECRET_KEY`: 512-bit secure key for JWT token signing (use `python3 -c "import secrets; print(secrets.token_urlsafe(64))"`)
+- Individual Database Components (Phase 2):
+  - `DB_PROTOCOL`: Database protocol (default: postgresql+psycopg)
+  - `DB_HOST`: Database host (default: localhost, docker: postgres)
+  - `DB_PORT`: Database port (default: 5432)
+  - `DB_USER`: Database username (default: chatuser)
+  - `DB_PASSWORD`: Database password (default: chatpassword - change for production)
+  - `DB_NAME`: Database name (default: chatdb)
 
 ### Environment Variable Best Practices (Phase 0 Lessons)
 
@@ -168,6 +175,60 @@ load_dotenv(dotenv_path)
 - プロジェクトルートの.envを確実に検出
 - 実行場所に依存しない堅牢性
 - ログ出力による可視性向上
+
+#### Environment Variable Management Patterns (Phase 1-2 Established)
+
+**1. Constants & Validation Pattern**
+```python
+# app/core/constants.py - デフォルト値一元管理
+DEFAULT_OPENAI_MODEL = "gpt-4o"
+DEFAULT_DB_HOST = "localhost"
+
+# app/core/config.py - 検証機能付き環境変数読み込み
+def validate_required_env(key: str) -> str:
+    """必須環境変数を検証・取得（未設定時はアプリ起動停止）"""
+    value = os.getenv(key)
+    if not value:
+        raise ValueError(f"{key} environment variable is required")
+    return value
+
+def validate_optional_env(key: str, default: str) -> str:
+    """オプション環境変数を検証・取得（ワーニング付き）"""
+    value = os.getenv(key, default)
+    if value == default:
+        logging.warning(f"[CONFIG] {key} is using default value.")
+    return value
+
+class Settings:
+    # 必須設定（セキュリティ重要）
+    JWT_SECRET_KEY: str = validate_required_env("JWT_SECRET_KEY")
+    OPENAI_API_KEY: str = validate_required_env("OPENAI_API_KEY")
+    
+    # オプション設定（デフォルト値付き）
+    OPENAI_MODEL: str = validate_optional_env("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+```
+
+**2. Individual Database Components Pattern**
+```python
+# 個別コンポーネント管理（Phase 2）
+DB_PROTOCOL: str = validate_required_env("DB_PROTOCOL")
+DB_HOST: str = validate_required_env("DB_HOST")
+DB_PORT: int = int(validate_required_env("DB_PORT"))
+DB_USER: str = validate_required_env("DB_USER")
+DB_PASSWORD: str = validate_required_env("DB_PASSWORD")
+DB_NAME: str = validate_required_env("DB_NAME")
+
+@property
+def DATABASE_URL(self) -> str:
+    """動的URL構築による一元管理"""
+    return f"{self.DB_PROTOCOL}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+```
+
+**3. Security-First Priority**
+- 🔥 **緊急対応**: JWT_SECRET_KEY, CORS設定（認証・セキュリティ）
+- 🟡 **高優先**: 運用改善設定（OpenAI、DB接続）
+- 🟢 **中優先**: インフラ統一設定（PostgreSQL）
+- 🔧 **低優先**: デバッグ・特殊用途設定
 
 ### Development Dependencies
 - Node.js 22+ 
@@ -238,10 +299,12 @@ git commit -m "適切なコミットメッセージ"
 
 **Note**: この手順により、コードベースの品質維持とレビュー効率の向上を実現できます。
 
-## Development Lessons Learned (Phase 0-9実装エッセンス)
+## Development Lessons Learned (環境変数Phase 0-2 + 機能開発Phase 0-11実装エッセンス)
 
 ### Environment & Configuration Management
 - **Phase 0**: 環境変数管理の最適化 - .envファイルのプロジェクトルート移動、find_dotenv()による堅牢な自動検出、Docker Compose環境変数の2段階設定パターン、ログ出力による可視化とデバッグ性向上
+- **Phase 1**: 体系的環境変数化（25項目完了） - セキュリティリスク優先（JWT/CORS）、運用改善（OpenAI設定）、インフラ統一（PostgreSQL）の段階的実装、validate_required_env/validate_optional_envパターン確立
+- **Phase 2**: 個別データベースコンポーネントシステム - DATABASE_URL動的構築、DB_PROTOCOL/HOST/PORT/USER/PASSWORD/NAME分離、settings.DATABASE_URLによる一元管理、重複コード削除（4ファイル→1ファイル集約）
 
 ### Architecture & Database Design Patterns
 - **Phase 1**: アーキテクチャ分離手法 - models/ディレクトリによるSQLAlchemyモデル分離、alembic依存関係管理の重要性
@@ -278,3 +341,10 @@ git commit -m "適切なコミットメッセージ"
 - **データ互換性確保**: Phase間でのデータ移行・変換パターンの確立
 - **外部APIクライアント管理**: Dependency Injection + Lifespan Eventsによるリソース効率化、main.pyからの責任分離によるアーキテクチャ改善（clients.py分離パターン）
 - **リファクタリング時の注意点**: インポート削除時の依存関係追跡の重要性、使用箇所の完全な特定によるコード整合性確保
+
+### Security & Configuration Management Insights
+- **セキュリティ優先順位付け**: JWT_SECRET_KEY等の緊急対応項目を最優先で実装、段階的セキュリティ強化アプローチ
+- **過度な抽象化の回避**: Nginx設定等の環境変数化において実用性を重視、変更需要の低い項目は対応不要と判断
+- **必須環境変数による事故防止**: validate_required_env()パターンで設定漏れによる本番障害を未然防止
+- **設定一元管理による保守性向上**: constants.py + settings.DATABASE_URLパターンでコード重複削除と一元管理を実現
+- **Docker環境の2段階設定**: .env変数置換 + environment明示指定によるコンテナ環境での確実な環境変数反映
