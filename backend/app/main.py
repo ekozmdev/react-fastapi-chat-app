@@ -412,9 +412,7 @@ async def stream_chat(
                             if hasattr(raw_item, "get")
                             else getattr(raw_item, "arguments", {})
                         )
-                        call_id = getattr(
-                            event.item, "id", str(uuid.uuid4())
-                        )
+                        call_id = getattr(event.item, "id", str(uuid.uuid4()))
 
                         print(
                             f"Tool call started: name={tool_name}, call_id={call_id}, args={arguments}"
@@ -573,6 +571,7 @@ async def stream_chat(
 # ---------- run ----------
 def start():
     import uvicorn
+
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)  # noqa: S104
 
 

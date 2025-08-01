@@ -4,8 +4,6 @@
 初回セットアップ時にテーブルを作成します
 """
 
-import os
-
 from sqlalchemy import create_engine
 
 from app.core.config import settings

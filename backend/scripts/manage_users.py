@@ -12,7 +12,6 @@
 
 import argparse
 import getpass
-import os
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -21,7 +20,6 @@ from pathlib import Path
 # プロジェクトのルートディレクトリをPythonパスに追加
 sys.path.append(str(Path(__file__).parent.parent))
 
-from dotenv import find_dotenv, load_dotenv
 from passlib.context import CryptContext
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -138,7 +136,9 @@ def register_user():  # noqa: C901
                 print("パスワードを入力してください。")
                 continue
             if not validate_password(password):
-                print(f"パスワードは{MIN_PASSWORD_LENGTH}文字以上で、英字と数字を含む必要があります。")
+                print(
+                    f"パスワードは{MIN_PASSWORD_LENGTH}文字以上で、英字と数字を含む必要があります。"
+                )
                 continue
 
             password_confirm = getpass.getpass("パスワード（確認）: ")
