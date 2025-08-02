@@ -388,6 +388,13 @@ curl -X POST "http://127.0.0.1:8000/api/auth/login" \
 
 #### 2. 単体機能テスト
 ```bash
+# 注意: Claude Code環境では環境変数設定が困難なため、トークンを直接指定
+# まず認証トークンを取得
+TOKEN=$(curl -X POST "http://127.0.0.1:8000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@test.com", "password": "test1234"}' \
+  --silent | jq -r '.access_token')
+
 # ツールなし会話
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
   -H "Authorization: Bearer $TOKEN" \
@@ -408,22 +415,32 @@ CONV_ID="mixed-test-$(date +%s)"
 
 # 1. ツールなし
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
   -d '{"message": "こんにちは！"}' # 通常会話
 
 # 2. ツールあり
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
   -d '{"message": "現在時刻をget_current_timeツールで取得してください"}' # ツール実行
 
 # 3. ツールなし
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
   -d '{"message": "ありがとうございます！"}' # 通常会話
 
 # 4. 別ツール
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
   -d '{"message": "10 + 15を計算してください"}' # 計算ツール
 
 # 5. ツールなし
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
   -d '{"message": "素晴らしい！"}' # 通常会話
 ```
 

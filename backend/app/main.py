@@ -247,6 +247,20 @@ async def delete_conversation(
     return {"message": "deleted"}
 
 
+# ---------- Helper Functions ----------
+def should_include_message(message: Message) -> bool:
+    """メッセージをAPI履歴に含めるかを判定"""
+    if message.role == "tool":
+        return False
+    if message.role == "assistant":
+        try:
+            data = json.loads(message.content)
+            return "tool_calls" not in data
+        except json.JSONDecodeError:
+            return True
+    return True
+
+
 # ---------- SSE ----------
 @app.post("/api/chat/stream/{conversation_id}")
 async def stream_chat(
@@ -284,27 +298,11 @@ async def stream_chat(
             db.commit()
 
             # API用メッセージ履歴を準備（toolメッセージは除外）
-            api_messages = []
-            for m in conv.messages:
-                if m.role == "tool":
-                    # toolメッセージは履歴から除外
-                    continue
-                elif m.role == "assistant":
-                    # JSON形式メッセージはスキップ
-                    try:
-                        assistant_data = json.loads(m.content)
-                        if "tool_calls" in assistant_data:
-                            # tool_calls付きメッセージはスキップ
-                            continue
-                        else:
-                            # 通常のassistantメッセージ
-                            api_messages.append({"role": m.role, "content": m.content})
-                    except json.JSONDecodeError:
-                        # プレーンテキストの場合
-                        api_messages.append({"role": m.role, "content": m.content})
-                else:
-                    # userメッセージはそのまま
-                    api_messages.append({"role": m.role, "content": m.content})
+            api_messages = [
+                {"role": m.role, "content": m.content}
+                for m in conv.messages 
+                if should_include_message(m)
+            ]
 
             # ストリーミング開始
             assistant_content = ""
