@@ -17,24 +17,50 @@ import ProtectedRoute from './ProtectedRoute';
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
-  content: string;
+  role: 'user' | 'assistant' | 'tool';
+  content: string; // user/assistant: プレーンテキスト、tool: JSON文字列
   timestamp: string;
-  toolExecutions?: ToolExecution[];
 }
 
-interface ToolExecution {
-  id: string;
-  name: string;
-  status: 'executing' | 'completed';
+// Phase1.4: 削除予定（Phase1ではrenderMessage統一使用）
+// interface ToolExecution {
+//   id: string;
+//   name: string;
+//   status: 'executing' | 'completed';
+//   output?: string;
+// }
+
+// Phase1: 統一的JSON処理のための型定義
+interface MessageContent {
+  // user メッセージ
+  text?: string;
+
+  // assistant メッセージ
+  tool_calls?: ToolCall[];
+
+  // tool メッセージ
+  tool_call_id?: string;
+  tool_name?: string;
+  arguments?: Record<string, unknown>;
   output?: string;
+  execution_time_ms?: number;
+  status?: 'success' | 'error';
 }
 
+interface ToolCall {
+  id: string;
+  type: string;
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+// Phase1.4: streamingMessage簡素化（tool情報は個別メッセージとして処理）
 interface StreamingMessage {
   id: string;
   content: string;
   isStreaming: boolean;
-  toolExecutions: ToolExecution[];
 }
 
 interface Conversation {
@@ -44,6 +70,31 @@ interface Conversation {
   updated_at: string;
   message_count: number;
 }
+
+// Phase1: 統一的JSON処理ロジック（Phase1.md L202-224準拠）
+const parseMessageContent = (message: Message): MessageContent => {
+  if (message.role === 'tool') {
+    try {
+      return JSON.parse(message.content);
+    } catch {
+      console.error('Failed to parse tool message content');
+      return {};
+    }
+  }
+
+  if (message.role === 'assistant') {
+    try {
+      // JSON形式の場合（tool_callsあり）
+      return JSON.parse(message.content);
+    } catch {
+      // プレーンテキストの場合
+      return { text: message.content };
+    }
+  }
+
+  // user メッセージはプレーンテキスト
+  return { text: message.content };
+};
 
 const ChatApp: React.FC = () => {
   const { user, logout, token } = useAuth();
@@ -61,6 +112,8 @@ const ChatApp: React.FC = () => {
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // アコーディオン式ツール結果表示の展開状態管理
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -158,134 +211,29 @@ const ChatApp: React.FC = () => {
                 try {
                   const data = JSON.parse(line.slice(6));
 
-                  // デバッグ用：受信したSSEイベントをログ出力（簡潔化）
-                  if (data.type === 'tool_start' || data.type === 'tool_complete') {
-                    console.log(
-                      `SSE: ${data.type} - ${data.tool_name}`,
-                      data.tool_output ? `-> ${data.tool_output.substring(0, 30)}...` : ''
-                    );
-                  }
-
-                  switch (data.type) {
-                    case 'status':
-                      // ステータスは表示しない
+                  // Phase1.2: role属性によるシンプルな分岐処理
+                  switch (data.role) {
+                    case 'tool':
+                      // ツールメッセージを直接メッセージ履歴に追加
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          id: data.id,
+                          role: 'tool',
+                          content: data.content, // JSON文字列
+                          timestamp: data.timestamp || new Date().toISOString(),
+                        },
+                      ]);
                       break;
-                    case 'tool_decision':
-                      // 🆕 Phase 4.2: LLM決定時点でスピナー即座表示開始
-                      console.log(`🚀 Tool decision detected: ${data.tool_name}`);
-                      setStreamingMessage((prev) => {
-                        const executionId = data.execution_id || `${data.tool_name}_${Date.now()}`;
-
-                        // 🛡️ 双方向重複チェック: tool_startで既にエントリが存在するかチェック
-                        const existingExecution = prev?.toolExecutions.find(
-                          (exec) =>
-                            exec.id === executionId ||
-                            exec.name === data.tool_name ||
-                            (data.execution_id && exec.id === data.execution_id)
-                        );
-
-                        if (existingExecution) {
-                          // 既にtool_startで作成済み → スキップ
-                          console.log(
-                            `⚠️ Tool execution already exists for ${data.tool_name}, skipping tool_decision`
-                          );
-                          return prev;
-                        }
-
-                        const newExecution: ToolExecution = {
-                          id: executionId,
-                          name: data.tool_name,
-                          status: 'executing',
-                        };
-
-                        if (!prev) {
-                          // ストリーミングメッセージがまだない場合は作成
-                          return {
-                            id: data.message_id,
-                            content: '',
-                            isStreaming: true,
-                            toolExecutions: [newExecution],
-                          };
-                        }
-
-                        return {
-                          ...prev,
-                          toolExecutions: [...prev.toolExecutions, newExecution],
-                        };
-                      });
-                      break;
-                    case 'tool_start':
-                      // ✅ 双方向重複チェック: tool_decisionで既にエントリが存在するかチェック
-                      setStreamingMessage((prev) => {
-                        const executionId = data.execution_id || `${data.tool_name}_${Date.now()}`;
-
-                        // 🛡️ 強化された重複チェック: より正確なID照合
-                        const existingExecution = prev?.toolExecutions.find(
-                          (exec) =>
-                            exec.id === executionId ||
-                            exec.name === data.tool_name ||
-                            (data.execution_id && exec.id === data.execution_id)
-                        );
-
-                        if (existingExecution) {
-                          // 既にtool_decisionで作成済み → スキップ
-                          console.log(
-                            `⚠️ Tool execution already exists for ${data.tool_name}, skipping tool_start`
-                          );
-                          return prev;
-                        }
-
-                        // 新規ツール実行の場合のみ作成
-                        const newExecution: ToolExecution = {
-                          id: executionId,
-                          name: data.tool_name,
-                          status: 'executing',
-                        };
-
-                        if (!prev) {
-                          // ストリーミングメッセージがまだない場合は作成
-                          return {
-                            id: data.message_id,
-                            content: '',
-                            isStreaming: true,
-                            toolExecutions: [newExecution],
-                          };
-                        }
-
-                        return {
-                          ...prev,
-                          toolExecutions: [...prev.toolExecutions, newExecution],
-                        };
-                      });
-                      break;
-                    case 'tool_complete':
-                      // ツール実行完了：結果を表示
-                      setStreamingMessage((prev) => {
-                        if (!prev) return prev;
-
-                        return {
-                          ...prev,
-                          toolExecutions: prev.toolExecutions.map((exec) =>
-                            exec.name === data.tool_name
-                              ? {
-                                  ...exec,
-                                  status: 'completed',
-                                  output: data.tool_output || '',
-                                }
-                              : exec
-                          ),
-                        };
-                      });
-                      break;
-                    case 'content':
+                    case 'assistant':
+                      // assistantメッセージのストリーミング処理
                       setStreamingMessage((prev) => {
                         if (!prev) {
                           // 初回コンテンツの場合、新しいストリーミングメッセージを作成
                           return {
-                            id: data.message_id,
+                            id: data.id,
                             content: data.content,
                             isStreaming: true,
-                            toolExecutions: [],
                           };
                         }
                         return {
@@ -294,39 +242,45 @@ const ChatApp: React.FC = () => {
                         };
                       });
                       break;
-                    case 'done':
-                      setStreamingMessage((prev) => {
-                        if (prev) {
-                          setMessages((m) => [
-                            ...m,
-                            {
-                              id: data.message_id,
-                              role: 'assistant',
-                              content: prev.content,
-                              timestamp: new Date().toISOString(),
-                              toolExecutions: prev.toolExecutions, // ツール実行情報も保存
-                            },
-                          ]);
-                        }
-                        return null;
-                      });
-                      setIsLoading(false);
-                      fetchConversations();
-                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
-                      if (newChatIdRef.current) {
-                        navigate(`/chat/${newChatIdRef.current}`);
-                        newChatIdRef.current = null; // クリア
-                        // setIsCreatingNewChatはuseEffect内で処理完了後に設定
+                    default:
+                      // エラー処理（従来形式）
+                      if (data.error) {
+                        console.error('SSE error:', data.error);
+                        setIsLoading(false);
+                        alert(`エラー: ${data.error}`);
                       }
-                      break;
-                    case 'error':
-                      console.error('SSE error:', data.message);
-                      setIsLoading(false);
-                      alert(`エラー: ${data.message}`);
                       break;
                   }
                 } catch (e) {
                   console.error('Failed to parse SSE data:', e);
+                }
+              } else if (line.startsWith('done: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  // ストリーミング完了処理
+                  setStreamingMessage((prev) => {
+                    if (prev) {
+                      setMessages((m) => [
+                        ...m,
+                        {
+                          id: data.id,
+                          role: 'assistant',
+                          content: prev.content,
+                          timestamp: new Date().toISOString(),
+                        },
+                      ]);
+                    }
+                    return null;
+                  });
+                  setIsLoading(false);
+                  fetchConversations();
+                  // 新規チャットの場合、ストリーミング完了後にナビゲーション
+                  if (newChatIdRef.current) {
+                    navigate(`/chat/${newChatIdRef.current}`);
+                    newChatIdRef.current = null; // クリア
+                  }
+                } catch (e) {
+                  console.error('Failed to parse done event:', e);
                 }
               }
             }
@@ -535,15 +489,44 @@ const ChatApp: React.FC = () => {
     return date.toLocaleDateString('ja-JP');
   };
 
-  // ツール実行情報表示コンポーネント
-  const renderToolExecutions = (toolExecutions: ToolExecution[]) => (
-    <div className="tool-executions">
-      {toolExecutions.map((tool) => (
-        <div key={tool.id} className={`tool-execution ${tool.status}`}>
-          <div className="tool-header">
-            <div className="tool-icon">
-              {tool.status === 'executing' && <div className="tool-spinner"></div>}
-              {tool.status === 'completed' && (
+  // アコーディオン式ツール展開/折りたたみ
+  const toggleToolExpansion = (toolId: string) => {
+    setExpandedTools((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolId)) {
+        newSet.delete(toolId);
+      } else {
+        newSet.add(toolId);
+      }
+      return newSet;
+    });
+  };
+
+  // Phase1.3: 統一表示ロジック（アコーディオン式ツール結果表示対応）
+  const renderMessage = (message: Message) => {
+    const content = parseMessageContent(message);
+
+    switch (message.role) {
+      case 'user':
+        return <div className="message-text">{content.text || message.content}</div>;
+      case 'assistant':
+        return (
+          <div className="message-text">
+            <MarkdownRenderer content={content.text || message.content} />
+          </div>
+        );
+      case 'tool': {
+        const isExpanded = expandedTools.has(message.id);
+        return (
+          <div className="tool-message">
+            <button
+              className="tool-header clickable"
+              onClick={() => toggleToolExpansion(message.id)}
+              type="button"
+              aria-expanded={isExpanded}
+              aria-label={`${content.tool_name}の実行結果を${isExpanded ? '折りたたむ' : '展開する'}`}
+            >
+              <div className="tool-icon">
                 <svg
                   width="14"
                   height="14"
@@ -560,21 +543,20 @@ const ChatApp: React.FC = () => {
                     strokeLinejoin="round"
                   />
                 </svg>
-              )}
-            </div>
-            <span className="tool-name">{tool.name}</span>
-            <span className="tool-status-text">
-              {tool.status === 'executing' && '実行中...'}
-              {tool.status === 'completed' && '完了'}
-            </span>
+              </div>
+              <span className="tool-name">{content.tool_name}</span>
+              <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+            </button>
+            {isExpanded && content.output && <div className="tool-output">{content.output}</div>}
           </div>
-          {tool.output && tool.status === 'completed' && (
-            <div className="tool-output">{tool.output}</div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
+        );
+      }
+      default:
+        return <div className="message-text">{message.content}</div>;
+    }
+  };
+
+  // Phase1.4: 未使用のため削除（renderMessage統一に移行済み）
 
   /* ----------------------- render ----------------------------- */
   return (
@@ -731,20 +713,11 @@ const ChatApp: React.FC = () => {
             )}
             {messages?.map((msg) => (
               <div key={msg.id} className={`message ${msg.role}`}>
-                <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
+                <div className="message-avatar">
+                  {msg.role === 'user' ? 'You' : msg.role === 'tool' ? '🔧' : 'AI'}
+                </div>
                 <div className="message-content">
-                  {/* ツール実行情報表示 */}
-                  {msg.role === 'assistant' &&
-                    msg.toolExecutions &&
-                    msg.toolExecutions.length > 0 &&
-                    renderToolExecutions(msg.toolExecutions)}
-                  <div className="message-text">
-                    {msg.role === 'assistant' ? (
-                      <MarkdownRenderer content={msg.content} />
-                    ) : (
-                      msg.content
-                    )}
-                  </div>
+                  {renderMessage(msg)}
                   <div className="message-time">{formatTime(msg.timestamp)}</div>
                 </div>
               </div>
@@ -766,15 +739,9 @@ const ChatApp: React.FC = () => {
               <div className="message assistant">
                 <div className="message-avatar">AI</div>
                 <div className="message-content">
-                  {/* ツール実行情報表示 */}
-                  {streamingMessage.toolExecutions.length > 0 &&
-                    renderToolExecutions(streamingMessage.toolExecutions)}
                   <div className="message-text">
                     <MarkdownRenderer content={streamingMessage.content} />
-                    {streamingMessage.isStreaming &&
-                      streamingMessage.toolExecutions.every(
-                        (tool) => tool.status === 'completed'
-                      ) && <span className="typing-indicator">▊</span>}
+                    {streamingMessage.isStreaming && <span className="typing-indicator">▊</span>}
                   </div>
                 </div>
               </div>

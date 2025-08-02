@@ -771,6 +771,58 @@ body {
   font-size: 13px;
 }
 
+/* アコーディオン式ツールヘッダー（クリック可能ボタン）のスタイリング */
+.tool-header.clickable {
+  background: none;
+  border: none;
+  padding: 12px;
+  margin: 0; /* マージンリセット */
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+  text-align: left;
+  box-shadow: none; /* シャドウを無効化 */
+}
+
+.tool-header.clickable:hover {
+  background-color: #f3f4f6;
+}
+
+.tool-header.clickable:focus {
+  outline: none;
+}
+
+.tool-header.clickable:active {
+  background-color: #e5e7eb;
+}
+
+.expand-icon {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+/* Phase1: アコーディオン式ツールメッセージのスタイリング */
+.tool-message {
+  margin-bottom: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #fafafa;
+  overflow: hidden;
+}
+
+.tool-output {
+  padding: 8px 12px;
+  background-color: #f9f9f9;
+  border-top: 1px solid #e0e0e0;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+  font-size: 13px;
+  color: #374151;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .tool-icon {
   display: flex;
   align-items: center;
