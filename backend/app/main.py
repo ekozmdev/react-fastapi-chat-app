@@ -283,18 +283,18 @@ async def stream_chat(
             db.add(user_msg)
             db.commit()
 
-            # API用メッセージ履歴を準備（Phase1: toolメッセージはスキップ）
+            # API用メッセージ履歴を準備（toolメッセージは除外）
             api_messages = []
             for m in conv.messages:
                 if m.role == "tool":
-                    # Phase1: toolメッセージは履歴から除外（エージェント側で自動処理される）
+                    # toolメッセージは履歴から除外
                     continue
                 elif m.role == "assistant":
-                    # assistantメッセージがJSON形式の場合（tool_calls付き）はスキップ
+                    # JSON形式メッセージはスキップ
                     try:
                         assistant_data = json.loads(m.content)
                         if "tool_calls" in assistant_data:
-                            # Phase1: tool_calls付きメッセージはスキップ（不要）
+                            # tool_calls付きメッセージはスキップ
                             continue
                         else:
                             # 通常のassistantメッセージ
@@ -315,11 +315,11 @@ async def stream_chat(
             # Agents SDK でストリーミング実行（依存性注入されたagent使用）
             result = Runner.run_streamed(chat_agent, api_messages)
             async for event in result.stream_events():
-                # Phase 1: mainブランチ方式でイベント検出（最優先）
+                # ツールイベント検出
                 if hasattr(event, "item") and hasattr(event.item, "type"):
 
                     if event.item.type == "tool_call_item":
-                        # ツール呼び出し開始（mainブランチ方式）
+                        # ツール呼び出し開始
                         raw_item = event.item.raw_item
                         tool_name = (
                             raw_item.get("name")
@@ -334,7 +334,7 @@ async def stream_chat(
                         }
 
                     elif event.item.type == "tool_call_output_item":
-                        # ツール実行完了（mainブランチ方式）
+                        # ツール実行完了
                         # call_idを複数の方法で取得を試行
                         call_id = (
                             getattr(event.item, "tool_call_id", None) or

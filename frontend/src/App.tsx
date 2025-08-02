@@ -22,13 +22,6 @@ interface Message {
   timestamp: string;
 }
 
-// Phase1.4: 削除予定（Phase1ではrenderMessage統一使用）
-// interface ToolExecution {
-//   id: string;
-//   name: string;
-//   status: 'executing' | 'completed';
-//   output?: string;
-// }
 
 // Phase1: 統一的JSON処理のための型定義
 interface MessageContent {
@@ -556,7 +549,6 @@ const ChatApp: React.FC = () => {
     }
   };
 
-  // Phase1.4: 未使用のため削除（renderMessage統一に移行済み）
 
   /* ----------------------- render ----------------------------- */
   return (
