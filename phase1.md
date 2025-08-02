@@ -16,7 +16,7 @@ tool_metadata = {
         {
             "name": "get_weather",
             "input": {"location": "東京"},
-            "output": "晴れ、15℃", 
+            "output": "晴れ、15℃",
             "status": "success",
             "execution_time_ms": 1234
         }
@@ -42,6 +42,7 @@ tool_metadata = {
 **調査結果：**
 - ✅ `role:tool` は正式サポート済み
 - ✅ openai-agents-python SDK で `Converter.items_to_messages()` による標準変換対応
+  - SDKは、ツール出力（`ResponseFunctionToolCallOutput`）を `role: "tool"`、`tool_call_id`、`content` を含む `ChatCompletionToolMessageParam` に変換します。
 - ✅ API version: `2025-02-01-preview`（最新）
 
 ### 超シンプル化アプローチ：全情報をcontent統一
@@ -52,7 +53,7 @@ tool_metadata = {
 # role:tool メッセージ
 {
   "id": "msg3",
-  "role": "tool", 
+  "role": "tool",
   # toolだけcontentがJSON文字列
   "content": json.dumps({
     "tool_call_id": "call_abc123",
@@ -68,7 +69,7 @@ tool_metadata = {
 # role:assistant メッセージ（プレーンテキストのみ）
 {
   "id": "msg4",
-  "role": "assistant", 
+  "role": "assistant",
   "content": "現在の東京は晴れで、気温は15℃です。",  # プレーンテキスト
   "timestamp": "2025-01-15T10:30:25.000Z"
 }
@@ -95,7 +96,7 @@ class Message(Base):
     role = Column(String, nullable=False)  # "user" | "assistant"
     content = Column(Text, nullable=False)
     created_at = Column(DateTime)
-    
+
     # Phase 1-2で追加された複雑な構造
     tool_metadata = Column(JSON, nullable=True)
     has_detailed_executions = Column(Boolean, default=False)
@@ -111,7 +112,7 @@ class Message(Base):
     role = Column(String, nullable=False)  # "user" | "assistant" | "tool"
     content = Column(Text, nullable=False)  # user/assistant: プレーンテキスト、tool: JSON文字列
     created_at = Column(DateTime)
-    
+
     # リレーション
     conversation = relationship("Conversation", back_populates="messages")
 ```
@@ -120,7 +121,7 @@ class Message(Base):
 
 **🗑️ 未使用になるカラム・テーブル：**
 - `Message.tool_metadata` カラム（JSON）
-- `Message.has_detailed_executions` カラム（Boolean）  
+- `Message.has_detailed_executions` カラム（Boolean）
 - `Message.tool_executions` リレーション
 - `ToolExecution` テーブル全体
 - `models/tool_execution.py` ファイル
@@ -128,17 +129,23 @@ class Message(Base):
 
 ## チャット時のSSEでバックエンドからフロントエンドに送信されるデータ
 
+`openai-agents-python` SDKは、`Runner.run_streamed().stream_events()` を通じて `StreamEvent` オブジェクトをストリームします。これには主に `RawResponsesStreamEvent` と `RunItemStreamEvent` があります。
+
+*   **`RunItemStreamEvent`**: より高レベルなイベントで、完全なアイテム（メッセージやツール出力）が生成されたことを示します。SSEストリーミングには主にこれを使用します。
+    *   `item.type == "tool_call_output_item"`: ツールの実行結果。`tool_call_id`、`tool_name`、`output`、`status` などを含みます。
+    *   `item.type == "message_item"` (role: assistant): アシスタントの応答。`content` をチャンク単位で含みます。
+
 ### tool利用なしの場合
 
 #### データ構造
 
 ```
-data: {"role":"assistant","content":"こ","message_id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
-data: {"role":"assistant","content":"ん","message_id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
-data: {"role":"assistant","content":"に","message_id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
-data: {"role":"assistant","content":"ち","message_id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
-data: {"role":"assistant","content":"は","message_id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
-done: {"message_id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
+data: {"role":"assistant","content":"こ","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
+data: {"role":"assistant","content":"ん","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
+data: {"role":"assistant","content":"に","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
+data: {"role":"assistant","content":"ち","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
+data: {"role":"assistant","content":"は","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
+done: {"id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
 ```
 
 #### フロントエンド側の処理
@@ -153,13 +160,13 @@ done: 〜を受け取った場合はレスポンスの画面表示終了
 #### データ構造
 
 ```
-data: {"role": "tool", "content": "{\"tool_call_id\": \"call_kp3GvaOsZI8MVlvHLCaUfD10\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-01 22:23:55 UTC\", \"status\": \"success\"}", "id": "53fa37ac-ccc8-41f0-a2b7-7716d5677c12","timestamp": "2025-08-01T22:23:57.059772"}
+data: {"role": "tool", "content": "{"tool_call_id": "call_kp3GvaOsZI8MVlvHLCaUfD10", "tool_name": "get_current_time", "output": "2025-08-01 22:23:55 UTC", "status": "success"}", "id": "53fa37ac-ccc8-41f0-a2b7-7716d5677c12"}
 data: {"role":"assistant","content":"こ","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
 data: {"role":"assistant","content":"ん","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
 data: {"role":"assistant","content":"に","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
 data: {"role":"assistant","content":"ち","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
 data: {"role":"assistant","content":"は","id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
-done: {"message_id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
+done: {"id":"ed0aadaa-b8a2-4eab-ad89-59db719edc62"}
 ```
 
 #### フロントエンド側の処理
@@ -179,11 +186,11 @@ done: 〜を受け取った場合はレスポンスの画面表示終了
 interface MessageContent {
   // user メッセージ
   text?: string;
-  
+
   // assistant メッセージ
   tool_calls?: ToolCall[];
-  
-  // tool メッセージ  
+
+  // tool メッセージ
   tool_call_id?: string;
   tool_name?: string;
   arguments?: Record<string, any>;
@@ -201,7 +208,7 @@ const parseMessageContent = (message: Message): MessageContent => {
       return {};
     }
   }
-  
+
   if (message.role === 'assistant') {
     try {
       // JSON形式の場合（tool_callsあり）
@@ -211,7 +218,7 @@ const parseMessageContent = (message: Message): MessageContent => {
       return { text: message.content };
     }
   }
-  
+
   // user メッセージはプレーンテキスト
   return { text: message.content };
 };
@@ -222,22 +229,22 @@ const parseMessageContent = (message: Message): MessageContent => {
 ```typescript
 const renderMessage = (message: Message) => {
   const content = parseMessageContent(message);
-  
+
   switch (message.role) {
     case 'user':
       return <UserMessage text={content.text || message.content} />;
-      
+
     case 'assistant':
       return (
-        <AssistantMessage 
+        <AssistantMessage
           text={content.text || message.content}
           toolCalls={content.tool_calls}
         />
       );
-      
+
     case 'tool':
       return (
-        <ToolMessage 
+        <ToolMessage
           toolName={content.tool_name}
           output={content.output}
           status={content.status}
@@ -257,11 +264,13 @@ from agents.models.chatcmpl_converter import Converter
 async def stream_chat(conversation_id, request, ...):
     # Agents SDK でストリーミング実行
     result = Runner.run_streamed(chat_agent, api_messages)
-    
+
+    # deepwikiの調査結果に基づき、result.to_input_list()が永続化に最も適した完全な会話履歴を提供します。
     # 完了後に標準メッセージ形式に変換
     openai_messages = Converter.items_to_messages(result.to_input_list())
-    
+
     # 各メッセージをデータベースに保存
+    # deepwikiの調査結果に基づき、ストリーミング完了後にまとめて保存します。
     for msg in openai_messages:
         if msg['role'] == 'tool':
             # tool メッセージは JSON文字列で保存
@@ -280,7 +289,7 @@ async def stream_chat(conversation_id, request, ...):
         else:
             # user メッセージや通常の assistant メッセージはプレーンテキスト
             content = msg['content']
-            
+
         db_message = Message(
             conversation_id=conv.id,
             role=msg['role'],
@@ -302,7 +311,7 @@ async def stream_chat(conversation_id, request, ...):
 
 **データベース：**
 - カラム削除：2個
-- テーブル削除：1個  
+- テーブル削除：1個
 - リレーション削除：1個
 - ファイル削除：`tool_execution.py`
 
@@ -357,7 +366,7 @@ async def stream_chat(conversation_id, request, ...):
 ## 期待される成果
 
 - **コード保守性：劇的向上**
-- **開発速度：大幅向上**  
+- **開発速度：大幅向上**
 - **バグ発生率：大幅削減**
 - **新機能開発：加速**
 - **OpenAI仕様追従：容易**
@@ -371,7 +380,7 @@ Phase1変更による既存機能への影響を包括的に調査し、必要�
 ### 調査対象機能
 
 1. **新しい会話開始機能**
-2. **複数回やり取り・SSEストリーミング機能**  
+2. **複数回やり取り・SSEストリーミング機能**
 3. **過去の会話履歴復元・再会機能**
 4. **フロントエンドの画面表示・UI機能**
 5. **APIエンドポイント全体**

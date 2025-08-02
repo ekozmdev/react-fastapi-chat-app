@@ -368,3 +368,104 @@ git commit -m "適切なコミットメッセージ"
 - **テスト**: pytest + asyncio対応、適切なテストパターン
 - **リント**: Ruff（Python）+ Biome（TypeScript）による統一品質管理
 - **依存関係**: uv（Python）+ npm（Node.js）による効率的パッケージ管理
+
+## Phase1実装テスト手順（2025年8月）
+
+### Phase1実装成果
+- **バックエンド**: openai-agents-python SDK統合、role:toolメッセージ形式、SSE送信完全実装
+- **データ整合性**: フロントエンド送信とDB保存の統一、call_id不一致問題解決
+- **安定性**: ツール使用/非使用の混在セッションでエラーなし動作確認
+
+### テスト手順詳細
+
+#### 1. 基本準備
+```bash
+# 認証トークン取得
+curl -X POST "http://127.0.0.1:8000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@test.com", "password": "test1234"}'
+```
+
+#### 2. 単体機能テスト
+```bash
+# ツールなし会話
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "こんにちは、元気ですか？"}' 2>/dev/null
+
+# ツールあり会話
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "現在の時刻をget_current_timeツールで教えてください"}' 2>/dev/null
+```
+
+#### 3. 混在セッションテスト
+```bash
+# 同一会話IDで複数パターンテスト
+CONV_ID="mixed-test-$(date +%s)"
+
+# 1. ツールなし
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -d '{"message": "こんにちは！"}' # 通常会話
+
+# 2. ツールあり
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -d '{"message": "現在時刻をget_current_timeツールで取得してください"}' # ツール実行
+
+# 3. ツールなし
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -d '{"message": "ありがとうございます！"}' # 通常会話
+
+# 4. 別ツール
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -d '{"message": "10 + 15を計算してください"}' # 計算ツール
+
+# 5. ツールなし
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -d '{"message": "素晴らしい！"}' # 通常会話
+```
+
+#### 4. データ整合性確認
+```bash
+# 会話履歴取得
+curl -X GET "http://127.0.0.1:8000/api/conversations/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### 5. 期待する結果パターン
+
+**SSE送信形式（ツールあり）:**
+```json
+data: {"role": "tool", "content": "{\"tool_call_id\": \"call_abc123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-02 02:56:41 UTC\", \"status\": \"success\"}", "id": "call_abc123", "timestamp": "2025-08-02T02:56:41.118683+00:00"}
+data: {"role": "assistant", "content": "現在", "id": "assistant_id"}
+...
+done: {"id": "assistant_id"}
+```
+
+**DB保存形式:**
+```json
+{
+  "role": "tool",
+  "content": "{\"tool_call_id\": \"call_abc123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-02 02:56:41 UTC\", \"status\": \"success\"}"
+}
+```
+
+#### 6. 検証ポイント
+- ✅ **SSE送信**: `role: "tool"`イベントが正しく送信される
+- ✅ **DB保存**: ツール情報がJSON形式で保存される
+- ✅ **tool_name**: 空文字列でなく正しいツール名が入る
+- ✅ **エラーなし**: 混在セッションでAPIエラーが発生しない
+- ✅ **会話継続**: ツール実行後も正常に会話が継続できる
+
+### バックエンドログでの確認事項
+```
+[DEBUG] Tool started: get_current_time with ID [call_id]
+[DEBUG] Tool completed: call_id=[call_id], output=[output]
+[DEBUG] Sending tool_event: {"tool_call_id": "[call_id]", "tool_name": "get_current_time", "output": "[output]", "status": "success"}
+[DB保存] role=tool content={"tool_call_id": "[call_id]", "tool_name": "get_current_time", "output": "[output]", "status": "success"}
+[DB保存] role=assistant content=[assistant_response]
+```
+
+このテスト手順により、Phase1実装の完全性と安定性を確認できる。
