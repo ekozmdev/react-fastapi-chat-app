@@ -15,13 +15,17 @@ import LoginForm from './LoginForm';
 import MarkdownRenderer from './MarkdownRenderer';
 import ProtectedRoute from './ProtectedRoute';
 
+// Phase2: crypto.randomUUID()によるUUID生成
+const generateUserMessageId = (): string => {
+  return crypto.randomUUID(); // 暗号学的に安全なUUID
+};
+
 interface Message {
   id: string;
   role: 'user' | 'assistant' | 'tool';
   content: string; // user/assistant: プレーンテキスト、tool: JSON文字列
   timestamp: string;
 }
-
 
 // Phase1: 統一的JSON処理のための型定義
 interface MessageContent {
@@ -391,7 +395,7 @@ const ChatApp: React.FC = () => {
     if (!inputMessage.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: `msg_${Date.now()}`,
+      id: generateUserMessageId(), // Phase2: 統一UUID形式
       role: 'user',
       content: inputMessage,
       timestamp: new Date().toISOString(),
@@ -548,7 +552,6 @@ const ChatApp: React.FC = () => {
         return <div className="message-text">{message.content}</div>;
     }
   };
-
 
   /* ----------------------- render ----------------------------- */
   return (
