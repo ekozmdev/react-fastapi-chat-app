@@ -6,11 +6,12 @@ from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 
 from .base import Base
+from ..core.utils import generate_unique_id
 
 
 class Conversation(Base):
     __tablename__ = "conversations"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String, primary_key=True, default=generate_unique_id)
     title = Column(String, nullable=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
@@ -30,7 +31,7 @@ class Conversation(Base):
 
 class Message(Base):
     __tablename__ = "messages"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String, primary_key=True, default=generate_unique_id)
     conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False)
     role = Column(String, nullable=False)  # "user" | "assistant" | "tool"
     content = Column(Text, nullable=False)  # user/assistant: プレーンテキスト、tool: JSON文字列

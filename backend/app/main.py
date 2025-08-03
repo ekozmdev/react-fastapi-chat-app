@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from .clients import get_chat_agent, lifespan
 from .core.config import settings
 from .core.deps import get_current_user as get_current_user_dep
+from .core.utils import generate_unique_id
 from .core.security import (
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
     authenticate_user,
@@ -306,7 +307,7 @@ async def stream_chat(
 
             # ストリーミング開始
             assistant_content = ""
-            assistant_id = str(uuid.uuid4())
+            assistant_id = generate_unique_id()
             tool_tracking = {}  # ツール実行追跡: call_id -> {tool_name, tool_call_id}
             sent_tool_messages = []  # SSE送信したrole:toolメッセージを保存（DB保存用）
 
@@ -324,7 +325,7 @@ async def stream_chat(
                             if hasattr(raw_item, "get")
                             else getattr(raw_item, "name", "unknown")
                         )
-                        call_id = getattr(event.item, "id", str(uuid.uuid4()))
+                        call_id = getattr(event.item, "id", generate_unique_id())
 
                         tool_tracking[call_id] = {
                             "tool_name": tool_name,

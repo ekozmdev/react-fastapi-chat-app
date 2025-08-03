@@ -5,11 +5,12 @@ from sqlalchemy import Boolean, Column, DateTime, String
 from sqlalchemy.orm import relationship
 
 from .base import Base
+from ..core.utils import generate_unique_id
 
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String, primary_key=True, default=generate_unique_id)
     email = Column(String, unique=True, nullable=False, index=True)
     username = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
