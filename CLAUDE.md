@@ -33,7 +33,10 @@ uv run ruff format                                 # Format Python code
 uv run pytest                                      # Run tests
 ```
 
-**Note**: When testing or debugging backend changes, the user should start the server manually using the uvicorn command above. Claude should not attempt to start the server during development/testing sessions.
+**Note**: When testing or debugging changes, the user should start servers manually using the commands above. Claude should not attempt to start development servers (frontend/backend) or view server logs during development/testing sessions. 
+
+**User responsibilities**: Development server startup, server log monitoring, browser-based testing
+**Claude responsibilities**: Test code execution (pytest), API response verification (curl), code quality checks (lint/format)
 
 ### Docker Environment
 ```bash
@@ -349,12 +352,14 @@ git commit -m "適切なコミットメッセージ"
 - **設定一元管理による保守性向上**: constants.py + settings.DATABASE_URLパターンでコード重複削除と一元管理を実現
 - **Docker環境の2段階設定**: .env変数置換 + environment明示指定によるコンテナ環境での確実な環境変数反映
 
-## Latest Development Status (2025年1月)
+## Latest Development Status (2025年8月)
 
 ### Current Architecture Status
 - **環境変数管理**: Phase 0-2完全完了 - プロジェクトルート`.env`配置、25項目の体系的環境変数化、個別DBコンポーネント管理実装済み
 - **機能開発**: Phase 1-11完全完了 - ツール実行追跡、真のリアルタイム検出、レイヤー型アーキテクチャ、大規模クリーンアップ（30%コード削減）実装済み
-- **コード品質**: TypeScript安全性向上、Biome/Ruff統一フォーマット、セキュリティ改善（eval→ast.literal_eval）、アクセシビリティ対応完了
+- **Phase1実装**: **2025年8月完全完了** - データ構造シンプル化、role:toolメッセージ形式、SSE統合完成
+- **コード品質改善**: **2025年8月完全完了** - デバッグコメント除去、条件分岐簡素化、ID生成統一、重複ファイル削除
+- **技術的負債**: **完全解消** - 開発過程の技術的負債を全て除去、本番品質のクリーンなコードベース達成
 
 ### Production-Ready Features
 - **認証システム**: JWT + bcryptによる堅牢な認証、ユーザー管理スクリプト完備
@@ -365,6 +370,141 @@ git commit -m "適切なコミットメッセージ"
 
 ### Code Quality & Maintenance
 - **アーキテクチャ**: core/、schemas/、db/、models/による責任分離、clients.pyでのAPI管理分離
-- **テスト**: pytest + asyncio対応、適切なテストパターン
+- **ID生成統一**: generate_unique_id()による6箇所統一、将来の拡張性確保（数字ID等への変更容易）
+- **コード品質**: should_include_message()関数による条件分岐簡素化、テスタビリティ向上
+- **テスト**: pytest + asyncio対応、curlによる動作確認、適切なテストパターン
 - **リント**: Ruff（Python）+ Biome（TypeScript）による統一品質管理
 - **依存関係**: uv（Python）+ npm（Node.js）による効率的パッケージ管理
+
+## Phase1実装テスト手順（2025年8月）
+
+### Phase1実装成果
+- **バックエンド**: openai-agents-python SDK統合、role:toolメッセージ形式、SSE送信完全実装
+- **データ整合性**: フロントエンド送信とDB保存の統一、call_id不一致問題解決
+- **安定性**: ツール使用/非使用の混在セッションでエラーなし動作確認
+
+### テスト手順詳細
+
+#### 1. 基本準備
+```bash
+# 認証トークン取得
+curl -X POST "http://127.0.0.1:8000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@test.com", "password": "test1234"}'
+```
+
+#### 2. 単体機能テスト
+```bash
+# 注意: Claude Code環境では環境変数設定が困難なため、トークンを直接指定
+# まず認証トークンを取得
+TOKEN=$(curl -X POST "http://127.0.0.1:8000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@test.com", "password": "test1234"}' \
+  --silent | jq -r '.access_token')
+
+# ツールなし会話
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "こんにちは、元気ですか？"}' 2>/dev/null
+
+# ツールあり会話
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "現在の時刻をget_current_timeツールで教えてください"}' 2>/dev/null
+```
+
+#### 3. 混在セッションテスト
+```bash
+# 同一会話IDで複数パターンテスト
+CONV_ID="mixed-test-$(date +%s)"
+
+# 1. ツールなし
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "こんにちは！"}' # 通常会話
+
+# 2. ツールあり
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "現在時刻をget_current_timeツールで取得してください"}' # ツール実行
+
+# 3. ツールなし
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "ありがとうございます！"}' # 通常会話
+
+# 4. 別ツール
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "10 + 15を計算してください"}' # 計算ツール
+
+# 5. ツールなし
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "素晴らしい！"}' # 通常会話
+```
+
+#### 4. データ整合性確認
+```bash
+# 会話履歴取得
+curl -X GET "http://127.0.0.1:8000/api/conversations/$CONV_ID" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### 5. 期待する結果パターン
+
+**SSE送信形式（ツールあり）:**
+```json
+data: {"role": "tool", "content": "{\"tool_call_id\": \"call_abc123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-02 02:56:41 UTC\", \"status\": \"success\"}", "id": "call_abc123", "timestamp": "2025-08-02T02:56:41.118683+00:00"}
+data: {"role": "assistant", "content": "現在", "id": "assistant_id"}
+...
+done: {"id": "assistant_id"}
+```
+
+**DB保存形式:**
+```json
+{
+  "role": "tool",
+  "content": "{\"tool_call_id\": \"call_abc123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-02 02:56:41 UTC\", \"status\": \"success\"}"
+}
+```
+
+#### 6. 検証ポイント
+- ✅ **SSE送信**: `role: "tool"`イベントが正しく送信される
+- ✅ **DB保存**: ツール情報がJSON形式で保存される
+- ✅ **tool_name**: 空文字列でなく正しいツール名が入る
+- ✅ **エラーなし**: 混在セッションでAPIエラーが発生しない
+- ✅ **会話継続**: ツール実行後も正常に会話が継続できる
+
+### バックエンドログでの確認事項
+```
+[DEBUG] Tool started: get_current_time with ID [call_id]
+[DEBUG] Tool completed: call_id=[call_id], output=[output]
+[DEBUG] Sending tool_event: {"tool_call_id": "[call_id]", "tool_name": "get_current_time", "output": "[output]", "status": "success"}
+[DB保存] role=tool content={"tool_call_id": "[call_id]", "tool_name": "get_current_time", "output": "[output]", "status": "success"}
+[DB保存] role=assistant content=[assistant_response]
+```
+
+このテスト手順により、Phase1実装の完全性と安定性を確認できる。
+
+## Phase1実装 + コード品質改善完了（2025年8月3日）
+
+**Phase1実装成果**:
+- データベース構造の大幅シンプル化（tool_execution削除、role:tool形式統一）
+- OpenAI Agents SDK完全統合、SSEストリーミング安定化
+- ツール実行と通常会話の混在セッション完全対応
+
+**コード品質改善成果**:
+- 技術的負債完全除去（重複ファイル削除、デバッグコメント簡素化）
+- 条件分岐簡素化（should_include_message関数抽出）
+- ID生成統一（generate_unique_id関数による6箇所統一）
+- 将来の拡張性確保（数字ID等への変更容易）
+
+**最終状態**: **本番品質のクリーンなコードベース達成、継続開発準備完了**

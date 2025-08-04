@@ -1,7 +1,6 @@
-import time
+import json
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from agents import Agent, Runner
 from agents.stream_events import RawResponsesStreamEvent
@@ -10,8 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from openai.types.responses import (
     ResponseFunctionCallArgumentsDeltaEvent,
-    ResponseFunctionToolCall,
-    ResponseOutputItemAddedEvent,
     ResponseTextDeltaEvent,
 )
 from sqlalchemy.orm import Session
@@ -26,12 +23,12 @@ from .core.security import (
     get_password_hash,
     verify_password,
 )
+from .core.utils import generate_unique_id
 from .db.session import get_db
 from .models import Conversation, Message, User
 from .schemas import (
     ChatRequest,
     LoginRequest,
-    SSEEvent,
     Token,
     UserResponse,
     UserUpdateRequest,
@@ -48,62 +45,7 @@ app.add_middleware(
 )
 
 
-# 外部APIクライアントはclients.pyで管理（lifespanで初期化）
 
-
-# ---------- 以下、Pydanticクラスはschemas/に移動済み ----------
-
-
-# Phase 1: SSEストリーミング用ツール実行追跡クラス
-class StreamToolTracker:
-    """ツール実行の追跡とメタデータ生成を管理"""
-
-    def __init__(self):
-        self.tools_used: list[dict[str, Any]] = []
-        self.current_tool: dict[str, Any] | None = None
-
-    def start_tool(self, tool_name: str, arguments: dict[str, Any]) -> None:
-        """ツール実行開始"""
-        self.current_tool = {
-            "name": tool_name,
-            "input": arguments,
-            "start_time": time.time() * 1000,  # ミリ秒
-            "status": "executing",
-        }
-
-    def complete_tool(self, output: str = None, error: str = None) -> None:
-        """ツール実行完了"""
-        if self.current_tool:
-            execution_time = int(time.time() * 1000 - self.current_tool["start_time"])
-            self.current_tool.update(
-                {
-                    "output": output,
-                    "error": error,
-                    "status": "success" if not error else "error",
-                    "execution_time_ms": execution_time,
-                }
-            )
-            self.tools_used.append(self.current_tool)
-            self.current_tool = None
-
-    def get_metadata(self) -> dict[str, Any] | None:
-        """tool_metadataを生成"""
-        if not self.tools_used:
-            return None
-
-        success_count = sum(1 for t in self.tools_used if t["status"] == "success")
-        error_count = len(self.tools_used) - success_count
-        total_time = sum(t["execution_time_ms"] for t in self.tools_used)
-
-        return {
-            "tools_used": self.tools_used,
-            "summary": {
-                "total_tools": len(self.tools_used),
-                "total_time_ms": total_time,
-                "success_count": success_count,
-                "error_count": error_count,
-            },
-        }
 
 
 # ---------- Dependency ----------
@@ -249,45 +191,7 @@ async def list_conversations(
     }
 
 
-# Phase 7: tool_metadata → toolExecutions 変換関数
-def convert_tool_metadata_to_executions(
-    tool_metadata: dict[str, Any] | None,
-) -> list[dict[str, Any]] | None:
-    """
-    Phase 1で保存されたtool_metadataをフロントエンド期待形式のtoolExecutionsに変換
 
-    Args:
-        tool_metadata: Phase 1で保存されたツール実行メタデータ
-
-    Returns:
-        フロントエンド用のtoolExecutions配列、または None（ツール実行なしの場合）
-    """
-    if not tool_metadata or not isinstance(tool_metadata, dict):
-        return None
-
-    tools_used = tool_metadata.get("tools_used")
-    if not tools_used or not isinstance(tools_used, list):
-        return None
-
-    executions = []
-    for tool in tools_used:
-        # 必要なフィールドの存在確認
-        if not isinstance(tool, dict) or "name" not in tool:
-            continue
-
-        # 一意IDの生成（UUID）
-        execution_id = str(uuid.uuid4())
-
-        executions.append(
-            {
-                "id": execution_id,
-                "name": tool["name"],
-                "status": "completed",  # 履歴では常に完了済み
-                "output": tool.get("output", ""),  # 実行結果（空文字列でもOK）
-            }
-        )
-
-    return executions if executions else None
 
 
 @app.get("/api/conversations/{conversation_id}")
@@ -318,7 +222,6 @@ async def get_conversation(
                 "role": m.role,
                 "content": m.content,
                 "timestamp": m.created_at,
-                "toolExecutions": convert_tool_metadata_to_executions(m.tool_metadata),
             }
             for m in conv.messages
         ],
@@ -343,6 +246,20 @@ async def delete_conversation(
     db.delete(conv)
     db.commit()
     return {"message": "deleted"}
+
+
+# ---------- Helper Functions ----------
+def should_include_message(message: Message) -> bool:
+    """メッセージをAPI履歴に含めるかを判定"""
+    if message.role == "tool":
+        return False
+    if message.role == "assistant":
+        try:
+            data = json.loads(message.content)
+            return "tool_calls" not in data
+        except json.JSONDecodeError:
+            return True
+    return True
 
 
 # ---------- SSE ----------
@@ -373,162 +290,141 @@ async def stream_chat(
                 db.add(conv)
                 db.commit()
 
-            # ユーザーメッセージを保存
+
+            # userメッセージはストリーミング前に必ず1回だけ保存
             user_msg = Message(
                 conversation_id=conv.id, role="user", content=request.message
             )
             db.add(user_msg)
             db.commit()
 
-            # API用メッセージ履歴を準備（システムメッセージは除外）
+            # API用メッセージ履歴を準備（toolメッセージは除外）
             api_messages = [
-                {"role": m.role, "content": m.content} for m in conv.messages
+                {"role": m.role, "content": m.content}
+                for m in conv.messages
+                if should_include_message(m)
             ]
 
             # ストリーミング開始
             assistant_content = ""
-            assistant_id = str(uuid.uuid4())
-            tool_tracker = (
-                StreamToolTracker()
-            )  # Phase 1: SSEストリーミング用ツール追跡開始
+            assistant_id = generate_unique_id()
+            tool_tracking = {}  # ツール実行追跡: call_id -> {tool_name, tool_call_id}
+            sent_tool_messages = []  # SSE送信したrole:toolメッセージを保存（DB保存用）
 
             # Agents SDK でストリーミング実行（依存性注入されたagent使用）
             result = Runner.run_streamed(chat_agent, api_messages)
-
             async for event in result.stream_events():
-                # Phase 1: ツール実行イベントの処理
+                # ツールイベント検出
                 if hasattr(event, "item") and hasattr(event.item, "type"):
+
                     if event.item.type == "tool_call_item":
                         # ツール呼び出し開始
-                        # raw_itemから正確な情報を取得
                         raw_item = event.item.raw_item
                         tool_name = (
                             raw_item.get("name")
                             if hasattr(raw_item, "get")
                             else getattr(raw_item, "name", "unknown")
                         )
-                        arguments = (
-                            raw_item.get("arguments", {})
-                            if hasattr(raw_item, "get")
-                            else getattr(raw_item, "arguments", {})
-                        )
-                        call_id = getattr(event.item, "id", str(uuid.uuid4()))
+                        call_id = getattr(event.item, "id", generate_unique_id())
 
-                        print(
-                            f"Tool call started: name={tool_name}, call_id={call_id}, args={arguments}"
-                        )
-
-                        tool_tracker.start_tool(tool_name, arguments)
-
-                        # フロントエンドにツール開始イベントを送信
-                        tool_start_event = SSEEvent(
-                            type="tool_start",
-                            message_id=assistant_id,
-                            tool_name=tool_name,
-                            execution_id=call_id,
-                        )
-                        print(
-                            f"Sending tool_start event: {tool_start_event.model_dump_json()}"
-                        )
-                        yield f"data: {tool_start_event.model_dump_json()}\n\n"
+                        tool_tracking[call_id] = {
+                            "tool_name": tool_name,
+                            "tool_call_id": call_id
+                        }
 
                     elif event.item.type == "tool_call_output_item":
                         # ツール実行完了
+                        # call_idを複数の方法で取得を試行
+                        call_id = (
+                            getattr(event.item, "tool_call_id", None) or
+                            getattr(event.item, "id", None) or
+                            getattr(getattr(event.item, "raw_item", {}), "tool_call_id", None) or
+                            "unknown_call"
+                        )
                         output = getattr(event.item, "output", "")
-                        error = getattr(event.item, "error", None)
-                        call_id = getattr(event.item, "tool_call_id", "unknown_call")
 
-                        # 前回開始したツールの名前を使用
-                        tool_name = (
-                            tool_tracker.current_tool["name"]
-                            if tool_tracker.current_tool
-                            else "unknown"
-                        )
+                        # ツール名を特定（辞書からまたは別の方法で）
+                        tool_name = ""
+                        tool_info = None
 
-                        print(
-                            f"Tool call completed: call_id={call_id}, output={output}"
-                        )
+                        # まず辞書から検索
+                        if call_id in tool_tracking:
+                            tool_info = tool_tracking[call_id]
+                            tool_name = tool_info["tool_name"]
+                        else:
+                            # 辞書にない場合は、最初のエントリを使用（単一ツール実行の場合）
+                            if len(tool_tracking) == 1:
+                                first_key = next(iter(tool_tracking))
+                                tool_info = tool_tracking[first_key]
+                                tool_name = tool_info["tool_name"]
+                                call_id = first_key  # 正しいIDに修正
+                            else:
+                                # 部分的なIDマッチングも試行
+                                for tid, tinfo in tool_tracking.items():
+                                    if tid in call_id or call_id in tid:
+                                        tool_info = tinfo
+                                        tool_name = tinfo["tool_name"]
+                                        call_id = tid  # 正しいIDに修正
+                                        break
 
-                        tool_tracker.complete_tool(output=output, error=error)
+                        if tool_info:
+                            # phase1.md仕様のrole: toolイベントを送信
+                            tool_content_dict = {
+                                "tool_call_id": call_id,
+                                "tool_name": tool_name,
+                                "output": output,
+                                "status": "success"
+                            }
 
-                        # フロントエンドにツール完了イベントを送信
-                        tool_complete_event = SSEEvent(
-                            type="tool_complete",
-                            message_id=assistant_id,
-                            tool_name=tool_name,
-                            tool_output=output,
-                            execution_id=call_id,
-                        )
-                        print(
-                            f"Sending tool_complete event: {tool_complete_event.model_dump_json()}"
-                        )
-                        yield f"data: {tool_complete_event.model_dump_json()}\n\n"
+                            tool_event = {
+                                "role": "tool",
+                                "content": json.dumps(tool_content_dict, ensure_ascii=False),
+                                "id": call_id,
+                                "timestamp": datetime.now(UTC).isoformat()
+                            }
+                            yield f"data: {json.dumps(tool_event, ensure_ascii=False)}\n\n"
 
-                elif event.type == "raw_response_event":
-                    # RawResponsesStreamEventかどうかをまず確認
-                    if isinstance(event, RawResponsesStreamEvent):
-                        # 🆕 Phase 4.2: ツール決定の即座検出（実行前！）
-                        if isinstance(event.data, ResponseOutputItemAddedEvent):
-                            if isinstance(event.data.item, ResponseFunctionToolCall):
-                                tool_name = event.data.item.name
-                                call_id = event.data.item.call_id
+                            # DB保存用に情報を保存
+                            sent_tool_messages.append({
+                                "role": "tool",
+                                "content": json.dumps(tool_content_dict, ensure_ascii=False)
+                            })
 
-                                # 🛡️ エラーハンドリング: 空文字列チェック
-                                if not tool_name:
-                                    print(
-                                        "⚠️ Warning: tool_name is empty for ResponseFunctionToolCall (streaming in progress)"
-                                    )
-                                    continue  # 空の場合はスキップ、後続チャンクを待つ
+                            # 完了したツールは辞書から削除
+                            del tool_tracking[call_id]
 
-                                if not call_id:
-                                    print(
-                                        "⚠️ Warning: call_id is empty for ResponseFunctionToolCall (streaming in progress)"
-                                    )
-                                    continue  # 空の場合はスキップ、後続チャンクを待つ
+                elif isinstance(event, RawResponsesStreamEvent):
+                    if isinstance(event.data, ResponseTextDeltaEvent):
+                        content = event.data.delta
+                        assistant_content += content
+                        content_event = {
+                            "role": "assistant",
+                            "content": content,
+                            "id": assistant_id
+                        }
+                        yield f"data: {json.dumps(content_event, ensure_ascii=False)}\n\n"
+                    elif isinstance(event.data, ResponseFunctionCallArgumentsDeltaEvent):
+                        pass
 
-                                print(
-                                    f"🚀 LLM decided to use tool: {tool_name} (ID: {call_id})"
-                                )
+            # メッセージ保存
+            # SSE送信したツールメッセージを保存
+            for tool_msg in sent_tool_messages:
+                db_message = Message(
+                    conversation_id=conv.id,
+                    role=tool_msg["role"],
+                    content=tool_msg["content"]
+                )
+                db.add(db_message)
 
-                                # 即座にtool_decisionイベントを送信
-                                tool_decision_event = SSEEvent(
-                                    type="tool_decision",
-                                    message_id=assistant_id,
-                                    tool_name=tool_name,
-                                    execution_id=call_id,
-                                )
-                                print(
-                                    f"Sending tool_decision event: {tool_decision_event.model_dump_json()}"
-                                )
-                                yield f"data: {tool_decision_event.model_dump_json()}\n\n"
-
-                        # ✅ Phase 3実装: 型チェックによる完全分離（フィルタリング不要）
-                        elif isinstance(event.data, ResponseTextDeltaEvent):
-                            content = event.data.delta  # 純粋なAI応答のみ
-                            assistant_content += content
-
-                            # コンテンツストリーミング
-                            content_event = SSEEvent(
-                                type="content", content=content, message_id=assistant_id
-                            )
-                            yield f"data: {content_event.model_dump_json()}\n\n"
-                        elif isinstance(
-                            event.data, ResponseFunctionCallArgumentsDeltaEvent
-                        ):
-                            # ツール引数は完全に無視（デバッグ用ログのみ）
-                            print(f"Tool arguments ignored: {event.data.delta}")
-
-            # Phase 1: ツールメタデータを含めてアシスタントメッセージを保存
-            tool_metadata = tool_tracker.get_metadata()
-            db.add(
-                Message(
-                    id=assistant_id,
+            # 最終的なassistantメッセージを保存（assistant_contentがある場合のみ）
+            if assistant_content.strip():
+                db_message = Message(
                     conversation_id=conv.id,
                     role="assistant",
-                    content=assistant_content,
-                    tool_metadata=tool_metadata,
+                    content=assistant_content
                 )
-            )
+                db.add(db_message)
+
 
             # タイトル生成処理
             if not conv.title and len(conv.messages) > 0:
@@ -544,15 +440,13 @@ async def stream_chat(
             db.commit()
 
             # ストリーミング完了
-            done_event = SSEEvent(type="done", message_id=assistant_id)
-            yield f"data: {done_event.model_dump_json()}\n\n"
+            done_event = {"id": assistant_id}
+            yield f"done: {json.dumps(done_event, ensure_ascii=False)}\n"
 
         except Exception as e:
             # エラー送信
-            error_event = SSEEvent(
-                type="error", message=f"エラーが発生しました: {str(e)}"
-            )
-            yield f"data: {error_event.model_dump_json()}\n\n"
+            error_event = {"error": f"エラーが発生しました: {str(e)}"}
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
         finally:
             db.close()
 

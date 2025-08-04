@@ -26,6 +26,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.core.constants import MIN_PASSWORD_LENGTH
+from app.core.utils import generate_unique_id
 from app.models import User
 
 # データベース接続
@@ -149,7 +150,7 @@ def register_user():  # noqa: C901
 
         # ユーザー作成
         user = User(
-            id=str(uuid.uuid4()),
+            id=generate_unique_id(),
             email=email,
             username=username,
             password_hash=get_password_hash(password),
