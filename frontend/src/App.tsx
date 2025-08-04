@@ -88,7 +88,7 @@ const parseMessageContent = (message: Message): MessageContent => {
 };
 
 const ChatApp: React.FC = () => {
-  const { user, logout, token } = useAuth();
+  const { user, logout, token, isLoading: isAuthLoading } = useAuth();
   const { conversationId: urlConversationId } = useParams<{
     conversationId?: string;
   }>();
@@ -299,18 +299,31 @@ const ChatApp: React.FC = () => {
     fetchConversations();
   }, [fetchConversations]);
 
-  // URLパラメータの変更を監視
+  // URLパラメータの変更を監視（AuthContext初期化完了後のみ実行）
   useEffect(() => {
-    if (urlConversationId && urlConversationId !== conversationId) {
+    // AuthContext の初期化中は何もしない
+    if (isAuthLoading) {
+      return;
+    }
+
+    // 認証が必要だがトークンがない場合は何もしない
+    if (!token) {
+      return;
+    }
+
+    if (urlConversationId) {
       // 新規チャット作成中の場合は何もしない
       if (isCreatingNewChat) {
         // 新規チャット作成完了をマーク
         setIsCreatingNewChat(false);
         return;
       }
-      // 既存チャットの場合は通常通りfetchConversationを実行
-      setConversationId(urlConversationId);
-      fetchConversation(urlConversationId);
+      
+      // 履歴が空の場合（初期ロード）または異なる会話IDの場合に履歴取得
+      if (messages.length === 0 || urlConversationId !== conversationId) {
+        setConversationId(urlConversationId);
+        fetchConversation(urlConversationId);
+      }
     } else if (!urlConversationId && conversationId) {
       // 新規チャット作成中の場合はクリアしない
       if (isCreatingNewChat) {
@@ -322,7 +335,7 @@ const ChatApp: React.FC = () => {
         setMessages([]);
       }
     }
-  }, [urlConversationId, conversationId, isCreatingNewChat, fetchConversation]);
+  }, [urlConversationId, conversationId, isCreatingNewChat, fetchConversation, isAuthLoading, token, messages.length]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
   useEffect(() => {
