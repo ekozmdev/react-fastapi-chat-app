@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from .clients import get_chat_agent, lifespan
 from .core.config import settings
 from .core.deps import get_current_user as get_current_user_dep
-from .core.utils import generate_unique_id
 from .core.security import (
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
     authenticate_user,
@@ -24,6 +23,7 @@ from .core.security import (
     get_password_hash,
     verify_password,
 )
+from .core.utils import generate_unique_id
 from .db.session import get_db
 from .models import Conversation, Message, User
 from .schemas import (
@@ -301,7 +301,7 @@ async def stream_chat(
             # API用メッセージ履歴を準備（toolメッセージは除外）
             api_messages = [
                 {"role": m.role, "content": m.content}
-                for m in conv.messages 
+                for m in conv.messages
                 if should_include_message(m)
             ]
 
@@ -393,7 +393,6 @@ async def stream_chat(
                             # 完了したツールは辞書から削除
                             del tool_tracking[call_id]
 
-                # Phase 2: RawResponsesStreamEvent処理（テキストストリーミング）
                 elif isinstance(event, RawResponsesStreamEvent):
                     if isinstance(event.data, ResponseTextDeltaEvent):
                         content = event.data.delta

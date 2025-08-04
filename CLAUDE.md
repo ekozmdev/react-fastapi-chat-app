@@ -33,7 +33,10 @@ uv run ruff format                                 # Format Python code
 uv run pytest                                      # Run tests
 ```
 
-**Note**: When testing or debugging backend changes, the user should start the server manually using the uvicorn command above. Claude should not attempt to start the server during development/testing sessions.
+**Note**: When testing or debugging changes, the user should start servers manually using the commands above. Claude should not attempt to start development servers (frontend/backend) or view server logs during development/testing sessions. 
+
+**User responsibilities**: Development server startup, server log monitoring, browser-based testing
+**Claude responsibilities**: Test code execution (pytest), API response verification (curl), code quality checks (lint/format)
 
 ### Docker Environment
 ```bash

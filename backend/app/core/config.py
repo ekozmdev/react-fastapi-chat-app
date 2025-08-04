@@ -18,7 +18,6 @@ from .constants import (
 
 # 環境変数を読み込み（プロジェクトルートの.envを自動検出）
 dotenv_path = find_dotenv()
-print(f"[CONFIG] Loading .env from: {dotenv_path}")
 load_dotenv(dotenv_path)
 
 

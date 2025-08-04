@@ -1,11 +1,10 @@
-import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, Column, DateTime, String
 from sqlalchemy.orm import relationship
 
-from .base import Base
 from ..core.utils import generate_unique_id
+from .base import Base
 
 
 class User(Base):

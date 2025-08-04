@@ -1,12 +1,10 @@
-import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import relationship
 
-from .base import Base
 from ..core.utils import generate_unique_id
+from .base import Base
 
 
 class Conversation(Base):

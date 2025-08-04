@@ -15,9 +15,8 @@ import LoginForm from './LoginForm';
 import MarkdownRenderer from './MarkdownRenderer';
 import ProtectedRoute from './ProtectedRoute';
 
-// Phase2: crypto.randomUUID()によるUUID生成
 const generateUserMessageId = (): string => {
-  return crypto.randomUUID(); // 暗号学的に安全なUUID
+  return crypto.randomUUID();
 };
 
 interface Message {
@@ -27,7 +26,6 @@ interface Message {
   timestamp: string;
 }
 
-// Phase1: 統一的JSON処理のための型定義
 interface MessageContent {
   // user メッセージ
   text?: string;
@@ -38,9 +36,7 @@ interface MessageContent {
   // tool メッセージ
   tool_call_id?: string;
   tool_name?: string;
-  arguments?: Record<string, unknown>;
   output?: string;
-  execution_time_ms?: number;
   status?: 'success' | 'error';
 }
 
@@ -53,7 +49,6 @@ interface ToolCall {
   };
 }
 
-// Phase1.4: streamingMessage簡素化（tool情報は個別メッセージとして処理）
 interface StreamingMessage {
   id: string;
   content: string;
@@ -68,7 +63,6 @@ interface Conversation {
   message_count: number;
 }
 
-// Phase1: 統一的JSON処理ロジック（Phase1.md L202-224準拠）
 const parseMessageContent = (message: Message): MessageContent => {
   if (message.role === 'tool') {
     try {
@@ -208,7 +202,6 @@ const ChatApp: React.FC = () => {
                 try {
                   const data = JSON.parse(line.slice(6));
 
-                  // Phase1.2: role属性によるシンプルな分岐処理
                   switch (data.role) {
                     case 'tool':
                       // ツールメッセージを直接メッセージ履歴に追加
@@ -395,7 +388,7 @@ const ChatApp: React.FC = () => {
     if (!inputMessage.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: generateUserMessageId(), // Phase2: 統一UUID形式
+      id: generateUserMessageId(),
       role: 'user',
       content: inputMessage,
       timestamp: new Date().toISOString(),
@@ -499,7 +492,6 @@ const ChatApp: React.FC = () => {
     });
   };
 
-  // Phase1.3: 統一表示ロジック（アコーディオン式ツール結果表示対応）
   const renderMessage = (message: Message) => {
     const content = parseMessageContent(message);
 
