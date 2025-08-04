@@ -88,7 +88,7 @@ const parseMessageContent = (message: Message): MessageContent => {
 };
 
 const ChatApp: React.FC = () => {
-  const { user, logout, token } = useAuth();
+  const { user, logout, token, isLoading: isAuthLoading } = useAuth();
   const { conversationId: urlConversationId } = useParams<{
     conversationId?: string;
   }>();
@@ -105,6 +105,9 @@ const ChatApp: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // アコーディオン式ツール結果表示の展開状態管理
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  // 右サイドバー関連の状態管理
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [selectedToolMessages, setSelectedToolMessages] = useState<Message[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -296,18 +299,31 @@ const ChatApp: React.FC = () => {
     fetchConversations();
   }, [fetchConversations]);
 
-  // URLパラメータの変更を監視
+  // URLパラメータの変更を監視（AuthContext初期化完了後のみ実行）
   useEffect(() => {
-    if (urlConversationId && urlConversationId !== conversationId) {
+    // AuthContext の初期化中は何もしない
+    if (isAuthLoading) {
+      return;
+    }
+
+    // 認証が必要だがトークンがない場合は何もしない
+    if (!token) {
+      return;
+    }
+
+    if (urlConversationId) {
       // 新規チャット作成中の場合は何もしない
       if (isCreatingNewChat) {
         // 新規チャット作成完了をマーク
         setIsCreatingNewChat(false);
         return;
       }
-      // 既存チャットの場合は通常通りfetchConversationを実行
-      setConversationId(urlConversationId);
-      fetchConversation(urlConversationId);
+      
+      // 履歴が空の場合（初期ロード）または異なる会話IDの場合に履歴取得
+      if (messages.length === 0 || urlConversationId !== conversationId) {
+        setConversationId(urlConversationId);
+        fetchConversation(urlConversationId);
+      }
     } else if (!urlConversationId && conversationId) {
       // 新規チャット作成中の場合はクリアしない
       if (isCreatingNewChat) {
@@ -319,7 +335,7 @@ const ChatApp: React.FC = () => {
         setMessages([]);
       }
     }
-  }, [urlConversationId, conversationId, isCreatingNewChat, fetchConversation]);
+  }, [urlConversationId, conversationId, isCreatingNewChat, fetchConversation, isAuthLoading, token, messages.length]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
   useEffect(() => {
@@ -341,6 +357,9 @@ const ChatApp: React.FC = () => {
     setStreamingMessage(null);
     setIsCreatingNewChat(false); // 新規チャット作成フラグをクリア
     newChatIdRef.current = null; // 新規チャットIDをクリア
+    // 右サイドバーを閉じる
+    setRightSidebarOpen(false);
+    setSelectedToolMessages([]);
     // SSE接続を明示的に閉じる
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -351,6 +370,9 @@ const ChatApp: React.FC = () => {
   const handleSelectConversation = (conv: Conversation) => {
     navigate(`/chat/${conv.id}`);
     setStreamingMessage(null);
+    // 右サイドバーを閉じる
+    setRightSidebarOpen(false);
+    setSelectedToolMessages([]);
     // 既存のSSE接続を閉じる
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -373,6 +395,9 @@ const ChatApp: React.FC = () => {
         setConversationId(null);
         setMessages([]);
         setStreamingMessage(null);
+        // 右サイドバーを閉じる
+        setRightSidebarOpen(false);
+        setSelectedToolMessages([]);
         if (eventSourceRef.current) {
           eventSourceRef.current.close();
           eventSourceRef.current = null;
@@ -464,6 +489,12 @@ const ChatApp: React.FC = () => {
     adjustTextareaHeight(e.target);
   };
 
+  // 右サイドバーを開いてツール結果を表示
+  const openToolSidebar = (toolMessages: Message[]) => {
+    setSelectedToolMessages(toolMessages);
+    setRightSidebarOpen(true);
+  };
+
   /* ----------------------- format utils ----------------------- */
   const formatTime = (ts: string) =>
     new Date(ts).toLocaleTimeString('ja-JP', {
@@ -479,6 +510,16 @@ const ChatApp: React.FC = () => {
     if (diff === 1) return '昨日';
     if (diff < 7) return `${diff}日前`;
     return date.toLocaleDateString('ja-JP');
+  };
+
+  // インデックスベースでツール検索
+  const getToolMessagesBeforeAssistant = (assistantIndex: number): Message[] => {
+    const toolMessages = [];
+    // assistantメッセージの直前からツールメッセージを逆順検索
+    for (let i = assistantIndex - 1; i >= 0 && messages[i] && messages[i].role === 'tool'; i--) {
+      toolMessages.unshift(messages[i]); // 時系列順に配置
+    }
+    return toolMessages;
   };
 
   // アコーディオン式ツール展開/折りたたみ
@@ -500,12 +541,26 @@ const ChatApp: React.FC = () => {
     switch (message.role) {
       case 'user':
         return <div className="message-text">{content.text || message.content}</div>;
-      case 'assistant':
+      case 'assistant': {
+        // 元のmessages配列でのインデックスを取得
+        const originalIndex = messages.findIndex((m) => m.id === message.id);
+        const relatedTools = getToolMessagesBeforeAssistant(originalIndex);
+
         return (
           <div className="message-text">
             <MarkdownRenderer content={content.text || message.content} />
+            {relatedTools.length > 0 && (
+              <button
+                type="button"
+                className="tool-results-link"
+                onClick={() => openToolSidebar(relatedTools)}
+              >
+                🔧 ツール実行結果
+              </button>
+            )}
           </div>
         );
+      }
       case 'tool': {
         const isExpanded = expandedTools.has(message.id);
         return (
@@ -546,6 +601,39 @@ const ChatApp: React.FC = () => {
         return <div className="message-text">{message.content}</div>;
     }
   };
+
+  // 右サイドバーコンポーネント
+  const renderRightSidebar = () => (
+    <div className={`right-sidebar ${rightSidebarOpen ? 'open' : 'closed'}`}>
+      {rightSidebarOpen && (
+        <>
+          <div className="sidebar-header">
+            <h3>ツール実行結果</h3>
+            <button
+              type="button"
+              className="close-btn"
+              onClick={() => setRightSidebarOpen(false)}
+              aria-label="サイドバーを閉じる"
+            >
+              ×
+            </button>
+          </div>
+          <div className="tool-results-content">
+            {selectedToolMessages.map((toolMsg) => {
+              const toolContent = parseMessageContent(toolMsg);
+              return (
+                <div key={toolMsg.id} className="tool-result-item">
+                  <h4>{toolContent.tool_name}</h4>
+                  <div className="tool-output">{toolContent.output}</div>
+                  <small className="tool-timestamp">{formatTime(toolMsg.timestamp)}</small>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
 
   /* ----------------------- render ----------------------------- */
   return (
@@ -700,17 +788,17 @@ const ChatApp: React.FC = () => {
                 <span>メッセージを読み込み中...</span>
               </div>
             )}
-            {messages?.map((msg) => (
-              <div key={msg.id} className={`message ${msg.role}`}>
-                <div className="message-avatar">
-                  {msg.role === 'user' ? 'You' : msg.role === 'tool' ? '🔧' : 'AI'}
+            {messages
+              ?.filter((msg) => msg.role !== 'tool')
+              .map((msg) => (
+                <div key={msg.id} className={`message ${msg.role}`}>
+                  <div className="message-avatar">{msg.role === 'user' ? 'You' : 'AI'}</div>
+                  <div className="message-content">
+                    {renderMessage(msg)}
+                    <div className="message-time">{formatTime(msg.timestamp)}</div>
+                  </div>
                 </div>
-                <div className="message-content">
-                  {renderMessage(msg)}
-                  <div className="message-time">{formatTime(msg.timestamp)}</div>
-                </div>
-              </div>
-            ))}
+              ))}
 
             {/* ローディング中の表示（ユーザー送信直後から表示） */}
             {isLoading && !streamingMessage && (
@@ -775,6 +863,9 @@ const ChatApp: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ------------- right sidebar ------------- */}
+      {renderRightSidebar()}
     </div>
   );
 };

@@ -870,7 +870,132 @@ body {
   margin-top: 4px;
 }
 
-/* レスポンシブ対応: 768px制限を撤廃してトグル式サイドバーに統一 */
+/* 右サイドバー */
+.right-sidebar {
+  background-color: #f3f3f3;
+  border-left: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 12px;
+  transition: width 0.3s ease-in-out;
+  overflow: hidden;
+}
+
+.right-sidebar.open {
+  width: 300px;
+}
+
+.right-sidebar.closed {
+  width: 0;
+  padding: 0;
+  border: none;
+}
+
+.right-sidebar .sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.right-sidebar .sidebar-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.right-sidebar .close-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #666;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.right-sidebar .close-btn:hover {
+  background-color: #e5e5e5;
+  color: #333;
+}
+
+.tool-results-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.tool-result-item {
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.tool-result-item h4 {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  margin: 0 0 6px 0;
+}
+
+.tool-result-item .tool-output {
+  font-size: 11px;
+  font-family: 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+  color: #555;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 6px;
+  margin-bottom: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-result-item .tool-timestamp {
+  font-size: 10px;
+  color: #999;
+}
+
+/* ツール実行結果リンク */
+.tool-results-link {
+  display: inline;
+  margin-left: 4px;
+  color: #3b82f6;
+  text-decoration: underline;
+  font-size: inherit;
+  cursor: pointer;
+  transition: color 0.2s;
+  border: none;
+  background: none;
+  padding: 0;
+  vertical-align: baseline;
+}
+
+.tool-results-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.tool-results-link:focus {
+  outline: none;
+}
+
+
+
+/* レスポンシブ対応 */
 @media (max-width: 768px) {
   .messages {
     padding: 0 16px;
@@ -890,5 +1015,10 @@ body {
   
   .tool-header {
     font-size: 12px;
+  }
+
+  /* 小さい画面では右サイドバーを狭くする */
+  .right-sidebar.open {
+    width: 200px; /* 300px → 200px に縮小 */
   }
 }
