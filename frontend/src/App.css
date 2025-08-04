@@ -872,92 +872,101 @@ body {
 
 /* 右サイドバー */
 .right-sidebar {
-  position: fixed;
-  right: 0;
-  top: 0;
-  width: 300px;
-  height: 100vh;
-  background: var(--bg-secondary, #ffffff);
-  border-left: 1px solid var(--border-color, #e5e7eb);
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
-  z-index: 1000;
+  background-color: #f3f3f3;
+  border-left: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
+  padding: 12px;
+  gap: 12px;
+  transition: width 0.3s ease-in-out;
+  overflow: hidden;
 }
 
 .right-sidebar.open {
-  transform: translateX(0);
+  width: 300px;
+}
+
+.right-sidebar.closed {
+  width: 0;
+  padding: 0;
+  border: none;
 }
 
 .right-sidebar .sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .right-sidebar .sidebar-header h3 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: #333;
   margin: 0;
 }
 
 .right-sidebar .close-btn {
   background: none;
   border: none;
-  font-size: 18px;
-  color: #6b7280;
+  font-size: 16px;
+  color: #666;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px;
   border-radius: 4px;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
 }
 
 .right-sidebar .close-btn:hover {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: #e5e5e5;
+  color: #333;
 }
 
 .tool-results-content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  min-height: 0;
 }
 
 .tool-result-item {
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #f9f9f9;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
 }
 
 .tool-result-item h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  margin: 0 0 6px 0;
 }
 
 .tool-result-item .tool-output {
-  font-size: 12px;
+  font-size: 11px;
   font-family: 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
-  color: #4b5563;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
+  color: #555;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
   border-radius: 4px;
-  padding: 8px;
-  margin-bottom: 8px;
+  padding: 6px;
+  margin-bottom: 6px;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .tool-result-item .tool-timestamp {
-  font-size: 11px;
-  color: #9ca3af;
+  font-size: 10px;
+  color: #999;
 }
 
 /* ツール実行結果リンク */
@@ -984,16 +993,9 @@ body {
   outline: none;
 }
 
-/* メインコンテンツ調整 */
-.main-content {
-  transition: margin-right 0.3s ease;
-}
 
-.main-content.with-right-sidebar {
-  margin-right: 300px;
-}
 
-/* レスポンシブ対応: 768px制限を撤廃してトグル式サイドバーに統一 */
+/* レスポンシブ対応 */
 @media (max-width: 768px) {
   .messages {
     padding: 0 16px;
@@ -1015,12 +1017,8 @@ body {
     font-size: 12px;
   }
 
-  /* モバイルでは右サイドバーを全幅に */
-  .right-sidebar {
-    width: 100%;
-  }
-
-  .main-content.with-right-sidebar {
-    margin-right: 0;
+  /* 小さい画面では右サイドバーを狭くする */
+  .right-sidebar.open {
+    width: 200px; /* 300px → 200px に縮小 */
   }
 }

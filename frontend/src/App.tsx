@@ -605,29 +605,33 @@ const ChatApp: React.FC = () => {
   // 右サイドバーコンポーネント
   const renderRightSidebar = () => (
     <div className={`right-sidebar ${rightSidebarOpen ? 'open' : 'closed'}`}>
-      <div className="sidebar-header">
-        <h3>ツール実行結果</h3>
-        <button
-          type="button"
-          className="close-btn"
-          onClick={() => setRightSidebarOpen(false)}
-          aria-label="サイドバーを閉じる"
-        >
-          ×
-        </button>
-      </div>
-      <div className="tool-results-content">
-        {selectedToolMessages.map((toolMsg) => {
-          const toolContent = parseMessageContent(toolMsg);
-          return (
-            <div key={toolMsg.id} className="tool-result-item">
-              <h4>{toolContent.tool_name}</h4>
-              <div className="tool-output">{toolContent.output}</div>
-              <small className="tool-timestamp">{formatTime(toolMsg.timestamp)}</small>
-            </div>
-          );
-        })}
-      </div>
+      {rightSidebarOpen && (
+        <>
+          <div className="sidebar-header">
+            <h3>ツール実行結果</h3>
+            <button
+              type="button"
+              className="close-btn"
+              onClick={() => setRightSidebarOpen(false)}
+              aria-label="サイドバーを閉じる"
+            >
+              ×
+            </button>
+          </div>
+          <div className="tool-results-content">
+            {selectedToolMessages.map((toolMsg) => {
+              const toolContent = parseMessageContent(toolMsg);
+              return (
+                <div key={toolMsg.id} className="tool-result-item">
+                  <h4>{toolContent.tool_name}</h4>
+                  <div className="tool-output">{toolContent.output}</div>
+                  <small className="tool-timestamp">{formatTime(toolMsg.timestamp)}</small>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -768,7 +772,7 @@ const ChatApp: React.FC = () => {
       </div>
 
       {/* ------------- main ------------- */}
-      <div className={`main-content ${rightSidebarOpen ? 'with-right-sidebar' : ''}`}>
+      <div className="main-content">
         <div className="chat-container">
           {messages && messages.length === 0 && !streamingMessage && !urlConversationId && (
             <div className="welcome-message">
