@@ -870,6 +870,129 @@ body {
   margin-top: 4px;
 }
 
+/* 右サイドバー */
+.right-sidebar {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 300px;
+  height: 100vh;
+  background: var(--bg-secondary, #ffffff);
+  border-left: 1px solid var(--border-color, #e5e7eb);
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-sidebar.open {
+  transform: translateX(0);
+}
+
+.right-sidebar .sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.right-sidebar .sidebar-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.right-sidebar .close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.right-sidebar .close-btn:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.tool-results-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.tool-result-item {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.tool-result-item h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.tool-result-item .tool-output {
+  font-size: 12px;
+  font-family: 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+  color: #4b5563;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-result-item .tool-timestamp {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* ツール実行結果リンク */
+.tool-results-link {
+  display: inline;
+  margin-left: 4px;
+  color: #3b82f6;
+  text-decoration: underline;
+  font-size: inherit;
+  cursor: pointer;
+  transition: color 0.2s;
+  border: none;
+  background: none;
+  padding: 0;
+  vertical-align: baseline;
+}
+
+.tool-results-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.tool-results-link:focus {
+  outline: none;
+}
+
+/* メインコンテンツ調整 */
+.main-content {
+  transition: margin-right 0.3s ease;
+}
+
+.main-content.with-right-sidebar {
+  margin-right: 300px;
+}
+
 /* レスポンシブ対応: 768px制限を撤廃してトグル式サイドバーに統一 */
 @media (max-width: 768px) {
   .messages {
@@ -890,5 +1013,14 @@ body {
   
   .tool-header {
     font-size: 12px;
+  }
+
+  /* モバイルでは右サイドバーを全幅に */
+  .right-sidebar {
+    width: 100%;
+  }
+
+  .main-content.with-right-sidebar {
+    margin-right: 0;
   }
 }
