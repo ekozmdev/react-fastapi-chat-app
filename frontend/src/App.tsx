@@ -387,6 +387,8 @@ const ChatApp: React.FC = () => {
     e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
 
+    // フロントエンドで即座にID生成してUI更新
+    // バックエンドは独自にIDを生成してDB保存（フロントエンドIDは送信されない）
     const userMessage: Message = {
       id: generateUserMessageId(),
       role: 'user',
