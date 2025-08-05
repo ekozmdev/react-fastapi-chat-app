@@ -1,6 +1,6 @@
 import type React from 'react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import type { AuthContextType, AuthState, User } from './types';
+import type { AuthContextType, AuthState, User } from '../types';
 
 // コンテキスト作成
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

@@ -9,11 +9,11 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import './App.css';
-import { AuthProvider, useAuth } from './AuthContext';
-import LoginForm from './LoginForm';
-import MarkdownRenderer from './MarkdownRenderer';
-import ProtectedRoute from './ProtectedRoute';
+import './styles/App.css';
+import { AuthProvider, useAuth } from './auth/AuthContext';
+import LoginForm from './auth/LoginForm';
+import ProtectedRoute from './auth/ProtectedRoute';
+import MarkdownRenderer from './components/MarkdownRenderer';
 import type { Conversation, Message, MessageContent, StreamingMessage } from './types';
 
 const generateUserMessageId = (): string => {
