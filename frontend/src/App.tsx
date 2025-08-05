@@ -14,54 +14,11 @@ import { AuthProvider, useAuth } from './AuthContext';
 import LoginForm from './LoginForm';
 import MarkdownRenderer from './MarkdownRenderer';
 import ProtectedRoute from './ProtectedRoute';
+import type { Conversation, Message, MessageContent, StreamingMessage } from './types';
 
 const generateUserMessageId = (): string => {
   return crypto.randomUUID();
 };
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'tool';
-  content: string; // user/assistant: プレーンテキスト、tool: JSON文字列
-  timestamp: string;
-}
-
-interface MessageContent {
-  // user メッセージ
-  text?: string;
-
-  // assistant メッセージ
-  tool_calls?: ToolCall[];
-
-  // tool メッセージ
-  tool_call_id?: string;
-  tool_name?: string;
-  output?: string;
-  status?: 'success' | 'error';
-}
-
-interface ToolCall {
-  id: string;
-  type: string;
-  function: {
-    name: string;
-    arguments: string;
-  };
-}
-
-interface StreamingMessage {
-  id: string;
-  content: string;
-  isStreaming: boolean;
-}
-
-interface Conversation {
-  id: string;
-  title: string | null;
-  created_at: string;
-  updated_at: string;
-  message_count: number;
-}
 
 const parseMessageContent = (message: Message): MessageContent => {
   if (message.role === 'tool') {
@@ -318,7 +275,7 @@ const ChatApp: React.FC = () => {
         setIsCreatingNewChat(false);
         return;
       }
-      
+
       // 履歴が空の場合（初期ロード）または異なる会話IDの場合に履歴取得
       if (messages.length === 0 || urlConversationId !== conversationId) {
         setConversationId(urlConversationId);
@@ -335,7 +292,15 @@ const ChatApp: React.FC = () => {
         setMessages([]);
       }
     }
-  }, [urlConversationId, conversationId, isCreatingNewChat, fetchConversation, isAuthLoading, token, messages.length]);
+  }, [
+    urlConversationId,
+    conversationId,
+    isCreatingNewChat,
+    fetchConversation,
+    isAuthLoading,
+    token,
+    messages.length,
+  ]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
   useEffect(() => {

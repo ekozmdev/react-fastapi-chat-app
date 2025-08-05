@@ -431,3 +431,303 @@ body { font-family: -apple-system, ...; }
 - **段階的実施**により動作確認しながら進行可能
 
 この調査により、**安全かつ効果的なCSS整理**の実施準備が完了しました。
+
+---
+
+# TypeScript型定義統合分析結果
+
+## 調査サマリー
+
+フロントエンドの型定義を**types.ts**に統合する可能性を詳細調査しました。現在10個の型定義が4ファイルに分散していますが、統合により保守性と再利用性の大幅改善が可能です。
+
+### 📊 現在の型定義分布
+- **App.tsx**: 5個の型定義（チャット・会話関連）
+- **AuthContext.tsx**: 3個の型定義（認証・ユーザー関連）
+- **MarkdownRenderer.tsx**: 1個の型定義（Props）
+- **ProtectedRoute.tsx**: 1個の型定義（Props）
+
+## 🎯 統合可能性評価
+
+### **✅ 移動推奨：共通・再利用性高（7個）**
+
+#### **チャット関連型（4個）**
+```typescript
+// /src/types.ts （新規作成）
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  timestamp: string;
+}
+
+export interface MessageContent {
+  text?: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+  tool_name?: string;
+  output?: string;
+  status?: 'success' | 'error';
+}
+
+export interface ToolCall {
+  id: string;
+  type: string;
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+export interface Conversation {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+```
+
+#### **認証関連型（3個）**
+```typescript
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AuthState {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
+export interface AuthContextType extends AuthState {
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  refreshToken: () => Promise<boolean>;
+  updateUser: (userData: Partial<User>) => void;
+}
+```
+
+### **🟡 移動検討：中程度の共通性（1個）**
+```typescript
+// 将来的に他コンポーネントでも使用される可能性
+export interface StreamingMessage {
+  id: string;
+  content: string;
+  isStreaming: boolean;
+}
+```
+
+### **❌ 移動非推奨：コンポーネント固有（2個）**
+```typescript
+// MarkdownRenderer.tsx固有 - そのまま残す
+interface MarkdownRendererProps {
+  content: string;
+  className?: string;
+}
+
+// ProtectedRoute.tsx固有 - そのまま残す  
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+```
+
+## 📝 実装手順と修正内容
+
+### **ステップ1：types.ts新規作成**
+```bash
+# ファイル作成
+touch /src/types.ts
+```
+
+**新規ファイル内容：**
+```typescript
+// === チャット・メッセージ関連型 ===
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  timestamp: string;
+}
+
+export interface MessageContent {
+  text?: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+  tool_name?: string;
+  output?: string;
+  status?: 'success' | 'error';
+}
+
+export interface ToolCall {
+  id: string;
+  type: string;
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+export interface StreamingMessage {
+  id: string;
+  content: string;
+  isStreaming: boolean;
+}
+
+export interface Conversation {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+// === 認証・ユーザー関連型 ===
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AuthState {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
+export interface AuthContextType extends AuthState {
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  refreshToken: () => Promise<boolean>;
+  updateUser: (userData: Partial<User>) => void;
+}
+```
+
+### **ステップ2：App.tsx修正**
+
+#### **削除対象（22-64行）**
+```typescript
+// 削除する型定義（5個）
+interface Message { /* ... */ }
+interface MessageContent { /* ... */ }
+interface ToolCall { /* ... */ }
+interface StreamingMessage { /* ... */ }
+interface Conversation { /* ... */ }
+```
+
+#### **追加：インポート文（17行目の後）**
+```typescript
+import {
+  type Message,
+  type MessageContent,
+  type ToolCall,
+  type StreamingMessage,
+  type Conversation,
+} from './types';
+```
+
+### **ステップ3：AuthContext.tsx修正**
+
+#### **削除対象（4-25行）**
+```typescript
+// 削除する型定義（3個）
+interface User { /* ... */ }
+interface AuthState { /* ... */ }
+interface AuthContextType extends AuthState { /* ... */ }
+```
+
+#### **追加：インポート文（2行目の後）**
+```typescript
+import {
+  type User,
+  type AuthState,
+  type AuthContextType,
+} from './types';
+```
+
+### **ステップ4：保持対象ファイル**
+
+#### **MarkdownRenderer.tsx - 変更なし**
+```typescript
+// コンポーネント固有型は保持
+interface MarkdownRendererProps {
+  content: string;
+  className?: string;
+}
+```
+
+#### **ProtectedRoute.tsx - 変更なし**
+```typescript
+// コンポーネント固有型は保持
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+```
+
+## 🎯 期待効果
+
+### **即座の効果**
+- **型定義の一元管理**: 7個の共通型を1ファイルに集約
+- **インポート構造整理**: 型専用ファイルによる依存関係明確化
+- **将来の拡張性**: 新規コンポーネントでの型再利用容易
+
+### **長期的効果**  
+- **保守性向上**: 型変更時の影響範囲特定容易
+- **開発効率向上**: 型定義の検索・参照時間短縮
+- **コード品質向上**: 型の一貫性確保、重複排除
+
+### **削減効果**
+- **App.tsx**: 42行削除（型定義） + 5行追加（インポート） = 37行削減
+- **AuthContext.tsx**: 21行削除（型定義） + 4行追加（インポート） = 17行削減  
+- **types.ts**: 80行新規追加（コメント含む）
+- **ネット効果**: +26行（型の一元化による管理性向上）
+
+## 🛡️ 安全性・リスク評価
+
+### **リスク：極低**
+- ✅ **循環参照**: 発生リスクなし（型のみの移動）
+- ✅ **機能影響**: 一切なし（型定義の移動のみ）
+- ✅ **バンドルサイズ**: 影響微小（型情報は実行時に除去）
+- ✅ **TypeScriptエラー**: インポート文追加で解決
+
+### **作業リスク：低**
+- **工数**: 1-2時間の軽微な作業
+- **テスト**: TypeScriptコンパイル確認のみ
+- **ロールバック**: Git revertで即座復旧可能
+
+## 📋 実装チェックリスト
+
+### **作業前確認**
+- [ ] 現在のTypeScriptエラーがないことを確認
+- [ ] Git作業ブランチの作成
+
+### **実装作業**
+- [ ] `/src/types.ts`新規作成・型定義追加
+- [ ] `App.tsx`から型定義削除・インポート追加
+- [ ] `AuthContext.tsx`から型定義削除・インポート追加
+- [ ] TypeScriptコンパイル確認（`npm run build`）
+- [ ] Lintチェック（`npm run lint`）
+
+### **検証作業**
+- [ ] アプリケーション動作確認
+- [ ] 型推論が正常に機能することを確認
+- [ ] インポート文が適切に解決されることを確認
+
+## 🎯 結論
+
+**TypeScript型定義のtypes.ts統合は技術的に完全実現可能**
+
+- **推奨度**: ⭐⭐⭐⭐⭐（強く推奨）
+- **実施効果**: 保守性・再利用性・開発効率の大幅向上
+- **実装リスク**: 極低（型定義移動のみ）
+- **作業工数**: 軽微（1-2時間）
+
+この統合により、**スケーラブルで保守性の高い型管理システム**が実現され、将来のコンポーネント分割やリファクタリング作業が大幅に効率化されます。
