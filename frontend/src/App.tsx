@@ -14,6 +14,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import LoginForm from './auth/LoginForm';
 import ProtectedRoute from './auth/ProtectedRoute';
 import MarkdownRenderer from './components/MarkdownRenderer';
+import NotFoundPage from './components/NotFoundPage';
 import type { Conversation, Message, StreamingMessage } from './types';
 import {
   findNextConversation,
@@ -95,10 +96,9 @@ const ChatApp: React.FC = () => {
         console.error('Failed to fetch conversation:', err);
         setIsLoadingConversation(false);
 
-        // 404エラーの場合は会話一覧を更新してホームに戻る
+        // 404エラーの場合はNotFoundページに遷移
         if (err instanceof Error && err.message.includes('404')) {
-          navigate('/');
-          fetchConversations();
+          navigate('/not-found-error');
         }
       }
     },
@@ -865,6 +865,7 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/not-found-error" element={<NotFoundPage />} />
           {/* 存在しないパスは認証済みならルートへ、未認証ならログインへ */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
