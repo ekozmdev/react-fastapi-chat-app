@@ -33,7 +33,7 @@ const ChatApp: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(urlConversationId || null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
@@ -247,50 +247,30 @@ const ChatApp: React.FC = () => {
     fetchConversations();
   }, [fetchConversations]);
 
-  // URLパラメータの変更を監視（AuthContext初期化完了後のみ実行）
+  // 認証完了後の会話復元専用（画面更新対応）
   useEffect(() => {
-    // AuthContext の初期化中は何もしない
-    if (isAuthLoading) {
-      return;
-    }
-
-    // 認証が必要だがトークンがない場合は何もしない
-    if (!token) {
-      return;
-    }
-
-    if (urlConversationId) {
-      // 新規チャット作成中の場合は何もしない
+    if (!isAuthLoading && token && urlConversationId) {
+      // 新規チャット作成中は無視
       if (isCreatingNewChat) {
-        // 新規チャット作成完了をマーク
         setIsCreatingNewChat(false);
         return;
       }
-
-      // 初期ロード時または異なる会話IDの場合に履歴取得
-      if (!conversationId || urlConversationId !== conversationId) {
+      
+      // 会話IDが異なる場合は常に取得
+      if (conversationId !== urlConversationId) {
         setConversationId(urlConversationId);
         fetchConversation(urlConversationId);
       }
-    } else if (!urlConversationId && conversationId) {
-      // 新規チャット作成中の場合はクリアしない
-      if (isCreatingNewChat) {
-        return;
-      }
-      // URLに会話IDがない場合はクリア（handleNewChatで既にクリア済みなので重複実行を避ける）
-      if (conversationId !== null) {
-        setConversationId(null);
-        setMessages([]);
-      }
     }
-  }, [
-    urlConversationId,
-    conversationId,
-    isCreatingNewChat,
-    fetchConversation,
-    isAuthLoading,
-    token,
-  ]);
+  }, [isAuthLoading, token, urlConversationId, conversationId, fetchConversation]);
+
+  // URLクリア処理専用
+  useEffect(() => {
+    if (!urlConversationId && conversationId && !isCreatingNewChat) {
+      setConversationId(null);
+      setMessages([]);
+    }
+  }, [urlConversationId, conversationId, isCreatingNewChat]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
   useEffect(() => {
