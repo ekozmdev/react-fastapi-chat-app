@@ -72,7 +72,7 @@ const ChatApp: React.FC = () => {
   const newChatIdRef = useRef<string | null>(null);
 
   /* ----------------------- fetch helpers ---------------------- */
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (): Promise<void> => {
     try {
       const res = await fetch('/api/conversations', {
         headers: {
@@ -83,6 +83,7 @@ const ChatApp: React.FC = () => {
       setConversations(data.conversations);
     } catch (err) {
       console.error('Failed to fetch conversations:', err);
+      throw err; // エラーを再スローして呼び出し元で処理可能に
     }
   }, [token]);
 
@@ -98,6 +99,11 @@ const ChatApp: React.FC = () => {
             Authorization: `Bearer ${token}`,
           },
         });
+
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
         const data = await res.json();
 
         // メッセージを段階的に表示（非同期）
@@ -109,9 +115,15 @@ const ChatApp: React.FC = () => {
       } catch (err) {
         console.error('Failed to fetch conversation:', err);
         setIsLoadingConversation(false);
+
+        // 404エラーの場合は会話一覧を更新してホームに戻る
+        if (err instanceof Error && err.message.includes('404')) {
+          navigate('/');
+          fetchConversations();
+        }
       }
     },
-    [token]
+    [token, navigate, fetchConversations]
   );
 
   /* ----------------------- SSE -------------------------- */
@@ -276,8 +288,8 @@ const ChatApp: React.FC = () => {
         return;
       }
 
-      // 履歴が空の場合（初期ロード）または異なる会話IDの場合に履歴取得
-      if (messages.length === 0 || urlConversationId !== conversationId) {
+      // 初期ロード時または異なる会話IDの場合に履歴取得
+      if (!conversationId || urlConversationId !== conversationId) {
         setConversationId(urlConversationId);
         fetchConversation(urlConversationId);
       }
@@ -299,7 +311,6 @@ const ChatApp: React.FC = () => {
     fetchConversation,
     isAuthLoading,
     token,
-    messages.length,
   ]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
@@ -345,29 +356,88 @@ const ChatApp: React.FC = () => {
     }
   };
 
+  /**
+   * 削除される会話の次に表示すべき会話を決定
+   * @param deletedId 削除される会話ID
+   * @param conversations 現在の会話一覧
+   * @returns 次に表示する会話（なければnull）
+   */
+  const findNextConversation = (
+    deletedId: string,
+    conversations: Conversation[]
+  ): Conversation | null => {
+    const deletedIndex = conversations.findIndex((conv) => conv.id === deletedId);
+
+    if (deletedIndex === -1) return null;
+
+    // 1つ下の会話（配列の次のインデックス）
+    if (deletedIndex < conversations.length - 1) {
+      return conversations[deletedIndex + 1];
+    }
+
+    // 下がない場合は1つ上（配列の前のインデックス）
+    if (deletedIndex > 0) {
+      return conversations[deletedIndex - 1];
+    }
+
+    // 他に会話がない場合（最後の1つを削除）
+    return null;
+  };
+
+  /**
+   * 現在開いている会話の削除処理
+   * @param nextConversation 事前に決定された次の会話（なければnull）
+   */
+  const handleCurrentConversationDeletion = async (nextConversation: Conversation | null) => {
+    if (nextConversation) {
+      // 次の会話に移動
+      navigate(`/chat/${nextConversation.id}`);
+      // 注意: setConversationId等は行わない（useEffectで自動更新される）
+    } else {
+      // 最後の会話だった場合はルートへ
+      navigate('/');
+      setConversationId(null);
+      setMessages([]);
+      setStreamingMessage(null);
+    }
+
+    // 共通クリーンアップ処理
+    setRightSidebarOpen(false);
+    setSelectedToolMessages([]);
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  };
+
   const handleDeleteConversation = async (convId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+
+    const isCurrentConversation = conversationId === convId;
+
     try {
+      // 削除前に次の会話を決定（現在の会話の場合のみ）
+      let nextConversation: Conversation | null = null;
+      if (isCurrentConversation) {
+        nextConversation = findNextConversation(convId, conversations);
+      }
+
+      // 1. 削除API実行
       await fetch(`/api/conversations/${convId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      fetchConversations();
-      if (conversationId === convId) {
-        navigate('/');
-        setConversationId(null);
-        setMessages([]);
-        setStreamingMessage(null);
-        // 右サイドバーを閉じる
-        setRightSidebarOpen(false);
-        setSelectedToolMessages([]);
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
-        }
+
+      // 2. 会話一覧更新（重要: awaitで完了を待つ）
+      await fetchConversations();
+
+      // 3. 現在開いている会話の場合のみ特別処理
+      if (isCurrentConversation) {
+        await handleCurrentConversationDeletion(nextConversation);
       }
+      // 現在開いていない会話の削除は何もしない（既存の動作を維持）
     } catch (err) {
       console.error('Failed to delete conversation:', err);
     }
