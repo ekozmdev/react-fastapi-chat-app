@@ -14,35 +14,14 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import LoginForm from './auth/LoginForm';
 import ProtectedRoute from './auth/ProtectedRoute';
 import MarkdownRenderer from './components/MarkdownRenderer';
-import type { Conversation, Message, MessageContent, StreamingMessage } from './types';
-
-const generateUserMessageId = (): string => {
-  return crypto.randomUUID();
-};
-
-const parseMessageContent = (message: Message): MessageContent => {
-  if (message.role === 'tool') {
-    try {
-      return JSON.parse(message.content);
-    } catch {
-      console.error('Failed to parse tool message content');
-      return {};
-    }
-  }
-
-  if (message.role === 'assistant') {
-    try {
-      // JSON形式の場合（tool_callsあり）
-      return JSON.parse(message.content);
-    } catch {
-      // プレーンテキストの場合
-      return { text: message.content };
-    }
-  }
-
-  // user メッセージはプレーンテキスト
-  return { text: message.content };
-};
+import type { Conversation, Message, StreamingMessage } from './types';
+import {
+  findNextConversation,
+  formatDate,
+  formatTime,
+  generateUserMessageId,
+  parseMessageContent,
+} from './utils';
 
 const ChatApp: React.FC = () => {
   const { user, logout, token, isLoading: isAuthLoading } = useAuth();
@@ -357,34 +336,6 @@ const ChatApp: React.FC = () => {
   };
 
   /**
-   * 削除される会話の次に表示すべき会話を決定
-   * @param deletedId 削除される会話ID
-   * @param conversations 現在の会話一覧
-   * @returns 次に表示する会話（なければnull）
-   */
-  const findNextConversation = (
-    deletedId: string,
-    conversations: Conversation[]
-  ): Conversation | null => {
-    const deletedIndex = conversations.findIndex((conv) => conv.id === deletedId);
-
-    if (deletedIndex === -1) return null;
-
-    // 1つ下の会話（配列の次のインデックス）
-    if (deletedIndex < conversations.length - 1) {
-      return conversations[deletedIndex + 1];
-    }
-
-    // 下がない場合は1つ上（配列の前のインデックス）
-    if (deletedIndex > 0) {
-      return conversations[deletedIndex - 1];
-    }
-
-    // 他に会話がない場合（最後の1つを削除）
-    return null;
-  };
-
-  /**
    * 現在開いている会話の削除処理
    * @param nextConversation 事前に決定された次の会話（なければnull）
    */
@@ -528,23 +479,6 @@ const ChatApp: React.FC = () => {
   const openToolSidebar = (toolMessages: Message[]) => {
     setSelectedToolMessages(toolMessages);
     setRightSidebarOpen(true);
-  };
-
-  /* ----------------------- format utils ----------------------- */
-  const formatTime = (ts: string) =>
-    new Date(ts).toLocaleTimeString('ja-JP', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-
-  const formatDate = (ts: string) => {
-    const date = new Date(ts);
-    const now = new Date();
-    const diff = Math.ceil(Math.abs(+now - +date) / 86_400_000);
-    if (diff === 0) return '今日';
-    if (diff === 1) return '昨日';
-    if (diff < 7) return `${diff}日前`;
-    return date.toLocaleDateString('ja-JP');
   };
 
   // インデックスベースでツール検索
