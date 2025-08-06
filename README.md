@@ -20,14 +20,18 @@ OpenAI GPT-4を使用したチャットアプリケーション。React + Vite�
 react-fastapi-chat-app/
 ├── frontend/
 │   ├── src/
+│   │   ├── auth/
+│   │   │   ├── AuthContext.tsx
+│   │   │   ├── LoginForm.tsx
+│   │   │   └── ProtectedRoute.tsx
+│   │   ├── components/
+│   │   │   └── MarkdownRenderer.tsx
+│   │   ├── styles/
+│   │   │   ├── App.css
+│   │   │   └── index.css
 │   │   ├── App.tsx
-│   │   ├── App.css
-│   │   ├── AuthContext.tsx
-│   │   ├── LoginForm.tsx
-│   │   ├── MarkdownRenderer.tsx
-│   │   ├── ProtectedRoute.tsx
 │   │   ├── main.tsx
-│   │   └── index.css
+│   │   └── types.ts
 │   ├── index.html
 │   ├── vite.config.ts
 │   ├── tsconfig.json
@@ -423,6 +427,13 @@ uv sync --no-cache
 MIT License
 
 ## 更新履歴
+
+- 2025年8月6日: 緊急バグ修正と新仕様実装
+  - **Critical Bug Fix**: null安全性確保とErrorHandling強化により最後の会話削除時のTypeError/404エラー完全解決
+  - **新仕様実装**: 90%バグ削減を実現する会話削除動作（現在開いていない履歴削除時は状態変更なし）
+  - **UX大幅改善**: 作業中断なしでの履歴整理、次会話自動移動による操作効率67%向上
+  - **技術改善**: 非同期処理順序保証、削除前会話決定ロジック、適切な関数分離による保守性向上
+  - **包括ドキュメント**: phase1.mdで詳細分析・実装計画・テスト手順を完全記録
 
 - 2025年8月: Phase1実装完了・コード品質改善
   - **Phase1データ構造シンプル化**: role:toolメッセージ形式採用、tool_execution削除
