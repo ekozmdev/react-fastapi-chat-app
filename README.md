@@ -25,7 +25,8 @@ react-fastapi-chat-app/
 │   │   │   ├── LoginForm.tsx
 │   │   │   └── ProtectedRoute.tsx
 │   │   ├── components/
-│   │   │   └── MarkdownRenderer.tsx
+│   │   │   ├── MarkdownRenderer.tsx
+│   │   │   └── NotFoundPage.tsx
 │   │   ├── styles/
 │   │   │   ├── App.css
 │   │   │   └── index.css
@@ -83,6 +84,8 @@ react-fastapi-chat-app/
 - **会話履歴**: PostgreSQLデータベースでチャット履歴を永続化（ユーザー別）
 - **会話管理**: 複数の会話を作成・切り替え・削除
 - **ルーティング**: React Routerによる適切なURL管理
+- **404エラーハンドリング**: ユーザーフレンドリーな専用エラーページ
+- **画面更新対応**: 会話URL直アクセス時の履歴復元
 - **レスポンシブデザイン**: モバイル対応
 - **高速な開発環境**: Viteによる高速HMR
 
@@ -234,6 +237,7 @@ npm run check   # Biome check
 - `/` - メインチャット画面（認証必須）
 - `/login` - ログインページ
 - `/chat/:conversationId` - 特定の会話表示
+- `/not-found-error` - 会話が見つからない場合のエラーページ
 - 404 - 存在しないパスは `/` にリダイレクト
 
 ## 本番環境へのデプロイ
@@ -427,6 +431,13 @@ uv sync --no-cache
 MIT License
 
 ## 更新履歴
+
+- 2025年8月8日: フロントエンド状態管理とエラーハンドリング改善
+  - **画面更新時履歴消失問題の根本解決**: useEffect最適化による認証完了後の確実な会話復元実装
+  - **404エラーハンドリング大幅改善**: 専用NotFoundページ（`/not-found-error`）でユーザーフレンドリーなエラー表示
+  - **状態管理最適化**: conversationId初期値修正、無限ループ防止、useEffect責任分離実現
+  - **UX向上**: 存在しない会話URLアクセス時の明確なフィードバックとホームリンクでの復帰経路提供
+  - **セキュリティ改善**: 他人の会話URLアクセス時の適切なエラー処理で情報漏洩防止
 
 - 2025年8月6日: 緊急バグ修正と新仕様実装
   - **Critical Bug Fix**: null安全性確保とErrorHandling強化により最後の会話削除時のTypeError/404エラー完全解決
