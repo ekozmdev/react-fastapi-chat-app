@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime
 
 from agents import Agent, Runner
-from agents.stream_events import RawResponsesStreamEvent
+from agents.stream_events import RawResponsesStreamEvent, RunItemStreamEvent
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -308,103 +308,79 @@ async def stream_chat(
             # ストリーミング開始
             assistant_content = ""
             assistant_id = generate_unique_id()
-            tool_tracking = {}  # ツール実行追跡: call_id -> {tool_name, tool_call_id}
+            # Phase3: 最小限の状態管理: call_id -> tool_name マッピング
+            active_tools = {}  # Dict[str, str] - call_id: tool_name
             sent_tool_messages = []  # SSE送信したrole:toolメッセージを保存（DB保存用）
 
             # Agents SDK でストリーミング実行（依存性注入されたagent使用）
             result = Runner.run_streamed(chat_agent, api_messages)
             async for event in result.stream_events():
-                # ツールイベント検出
-                if hasattr(event, "item") and hasattr(event.item, "type"):
-
-                    if event.item.type == "tool_call_item":
-                        # ツール呼び出し開始
-                        raw_item = event.item.raw_item
-                        tool_name = (
-                            raw_item.get("name")
-                            if hasattr(raw_item, "get")
-                            else getattr(raw_item, "name", "unknown")
-                        )
-                        call_id = getattr(event.item, "id", generate_unique_id())
-
-                        tool_tracking[call_id] = {
+                
+                # ========== 高レベルイベント: ツール処理 ==========
+                if isinstance(event, RunItemStreamEvent):
+                    
+                    if event.name == 'tool_called':
+                        # ツール呼び出し開始 - ツール名を記録
+                        try:
+                            call_id = event.item.raw_item.call_id
+                            tool_name = event.item.raw_item.name
+                            active_tools[call_id] = tool_name
+                            print(f"[DEBUG] Tool called: {tool_name} with ID {call_id}")
+                        except (AttributeError, KeyError) as e:
+                            print(f"[WARNING] tool_called属性アクセスエラー: {e}")
+                            continue
+                        
+                    elif event.name == 'tool_output':
+                        # ツール実行完了 - 直接出力を取得してSSE送信
+                        try:
+                            call_id = event.item.raw_item['call_id']
+                            output = event.item.output
+                            tool_name = active_tools.get(call_id, "unknown")
+                            print(f"[DEBUG] Tool completed: {tool_name} with ID {call_id}, output: {output}")
+                        except (KeyError, TypeError) as e:
+                            print(f"[WARNING] tool_output属性アクセスエラー: {e}")
+                            continue
+                        
+                        # Phase1仕様のrole:toolイベント送信
+                        tool_content_dict = {
+                            "tool_call_id": call_id,
                             "tool_name": tool_name,
-                            "tool_call_id": call_id
+                            "output": output,
+                            "status": "success"
                         }
-
-                    elif event.item.type == "tool_call_output_item":
-                        # ツール実行完了
-                        # call_idを複数の方法で取得を試行
-                        call_id = (
-                            getattr(event.item, "tool_call_id", None) or
-                            getattr(event.item, "id", None) or
-                            getattr(getattr(event.item, "raw_item", {}), "tool_call_id", None) or
-                            "unknown_call"
-                        )
-                        output = getattr(event.item, "output", "")
-
-                        # ツール名を特定（辞書からまたは別の方法で）
-                        tool_name = ""
-                        tool_info = None
-
-                        # まず辞書から検索
-                        if call_id in tool_tracking:
-                            tool_info = tool_tracking[call_id]
-                            tool_name = tool_info["tool_name"]
-                        else:
-                            # 辞書にない場合は、最初のエントリを使用（単一ツール実行の場合）
-                            if len(tool_tracking) == 1:
-                                first_key = next(iter(tool_tracking))
-                                tool_info = tool_tracking[first_key]
-                                tool_name = tool_info["tool_name"]
-                                call_id = first_key  # 正しいIDに修正
-                            else:
-                                # 部分的なIDマッチングも試行
-                                for tid, tinfo in tool_tracking.items():
-                                    if tid in call_id or call_id in tid:
-                                        tool_info = tinfo
-                                        tool_name = tinfo["tool_name"]
-                                        call_id = tid  # 正しいIDに修正
-                                        break
-
-                        if tool_info:
-                            # phase1.md仕様のrole: toolイベントを送信
-                            tool_content_dict = {
-                                "tool_call_id": call_id,
-                                "tool_name": tool_name,
-                                "output": output,
-                                "status": "success"
-                            }
-
-                            tool_event = {
-                                "role": "tool",
-                                "content": json.dumps(tool_content_dict, ensure_ascii=False),
-                                "id": call_id,
-                                "timestamp": datetime.now(UTC).isoformat()
-                            }
-                            yield f"data: {json.dumps(tool_event, ensure_ascii=False)}\n\n"
-
-                            # DB保存用に情報を保存
-                            sent_tool_messages.append({
-                                "role": "tool",
-                                "content": json.dumps(tool_content_dict, ensure_ascii=False)
-                            })
-
-                            # 完了したツールは辞書から削除
-                            del tool_tracking[call_id]
-
+                        
+                        tool_event = {
+                            "role": "tool",
+                            "content": json.dumps(tool_content_dict, ensure_ascii=False),
+                            "id": call_id,
+                            "timestamp": datetime.now(UTC).isoformat()
+                        }
+                        yield f"data: {json.dumps(tool_event, ensure_ascii=False)}\n\n"
+                        
+                        # DB保存用データ保存
+                        sent_tool_messages.append({
+                            "role": "tool",
+                            "content": json.dumps(tool_content_dict, ensure_ascii=False)
+                        })
+                        
+                        # 完了したツールを状態から削除
+                        active_tools.pop(call_id, None)
+                
+                # ========== 低レベルイベント: テキスト処理 ==========
                 elif isinstance(event, RawResponsesStreamEvent):
                     if isinstance(event.data, ResponseTextDeltaEvent):
+                        # テキスト応答のみ処理（AI応答のストリーミング）
                         content = event.data.delta
                         assistant_content += content
                         content_event = {
-                            "role": "assistant",
+                            "role": "assistant", 
                             "content": content,
                             "id": assistant_id
                         }
                         yield f"data: {json.dumps(content_event, ensure_ascii=False)}\n\n"
-                    elif isinstance(event.data, ResponseFunctionCallArgumentsDeltaEvent):
-                        pass
+                    
+                    # ResponseFunctionCallArgumentsDeltaEventは完全無視
+                    # → AI応答にツール引数JSONが混入する問題を根本解決
 
             # メッセージ保存
             # SSE送信したツールメッセージを保存

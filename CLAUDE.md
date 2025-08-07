@@ -426,6 +426,31 @@ git commit -m "適切なコミットメッセージ"
 - **依存関係**: uv（Python）+ npm（Node.js）による効率的パッケージ管理
 - **コンポーネント設計**: Page接尾辞削除による簡潔な命名、認証ロジックの適切な分離
 
+## テスト手順
+
+### 認証トークン取得 
+```bash
+curl -X POST "http://127.0.0.1:8000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@test.com", "password": "test1234"}'
+```
+**重要**: Claude Code環境では環境変数設定が困難なため、レスポンスからaccess_tokenを取得し、直接指定してテストを実行すること。
+
+### 基本テスト例
+```bash
+# ツールなし会話
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
+  -H "Authorization: Bearer [TOKEN]" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "こんにちは！元気ですか？"}'
+
+# ツールあり会話
+curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
+  -H "Authorization: Bearer [TOKEN]" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "現在の時刻をget_current_timeツールで教えてください"}'
+```
+
 ## Phase1実装テスト手順（2025年8月）
 
 ### Phase1実装成果
