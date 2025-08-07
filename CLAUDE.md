@@ -48,8 +48,25 @@ docker-compose ps       # Check service status
 ## Project Structure
 
 ```
-/frontend/              # React TypeScript app
+/frontend/              # React TypeScript app (2025年ベストプラクティス準拠)
   /src/                 # React source code
+    /auth/              # 認証関連コンポーネント
+      AuthContext.tsx   # 認証状態管理コンテキスト
+      LoginRoute.tsx    # ログインルート（認証済みリダイレクト対応）
+      ProtectedRoute.tsx # 保護ルート（Outletパターン）
+    /pages/             # ページコンポーネント（ルーティング単位）
+      Chat.tsx          # メインチャットページ
+      Login.tsx         # ログインページ
+      NotFound.tsx      # 404エラーページ
+    /components/        # 再利用可能UIコンポーネント
+      MarkdownRenderer.tsx # マークダウンレンダリング
+    /styles/            # スタイルシート
+      App.css           # アプリケーション全体のスタイル
+      index.css         # グローバルスタイル
+    App.tsx             # ルーティング定義（25行、最適化済み）
+    main.tsx            # エントリポイント（BrowserRouter配置）
+    types.ts            # TypeScript型定義
+    utils.ts            # ユーティリティ関数
   vite.config.ts        # Vite configuration with proxy to backend
   
 /backend/               # FastAPI application
@@ -314,6 +331,11 @@ git commit -m "適切なコミットメッセージ"
 - **Phase 2**: 段階的ツール導入 - @function_toolデコレータによる拡張可能設計、tool_metadata軽量データ保存アプローチ
 - **Phase 3**: 詳細実行追跡 - ToolExecutionManagerクラスによる2段階ステータス管理、マイグレーション・データベース設計のベストプラクティス
 
+### Frontend Architecture Evolution (2025年1月実装)
+- **Phase 12**: フロントエンド3ファイル分割リファクタリング - main.tsx（BrowserRouter配置）、App.tsx（ルーティング専用、878→69行92%削減）、ChatApp.tsx（チャット機能専用815行）による責任分離
+- **Phase 13**: Pages構造導入 - pages/フォルダによるページコンポーネント整理、ChatPage→Chat、LoginPage→Login、NotFoundPage→NotFoundの命名統一
+- **Phase 14**: React Router v6ベストプラクティス適用 - ProtectedRouteのOutletパターン化、ネストルート構造、LoginRouteコンポーネント分離による認証アーキテクチャ最適化
+
 ### SDK Integration & Event Handling
 - **Phase 4**: openai-agents-python SDK正式活用 - ResponseTextDeltaEvent vs ResponseFunctionCallArgumentsDeltaEventの型分離、フィルタリング削除による根本的アーキテクチャ改善
 - **Phase 5**: 真のリアルタイム実装 - ResponseOutputItemAddedEventによる即座スピナー表示、双方向重複防止ロジック、deepwiki技術レビュー手法
@@ -393,13 +415,16 @@ git commit -m "適切なコミットメッセージ"
 - **データベース**: PostgreSQL + SQLAlchemy 2.0 + Alembic、UUIDベース設計、適切な外部キー関係
 - **インフラ**: Docker Compose + Nginx、開発/本番環境分離、環境変数による設定管理
 
-### Code Quality & Maintenance
-- **アーキテクチャ**: core/、schemas/、db/、models/による責任分離、clients.pyでのAPI管理分離
+### Code Quality & Maintenance (2025年1月更新)
+- **フロントエンドアーキテクチャ**: pages/、auth/、components/による2025年ベストプラクティス準拠の責任分離
+- **ルーティング**: React Router v6 Outletパターン、ネストルート構造、適切な順序管理
+- **バックエンドアーキテクチャ**: core/、schemas/、db/、models/による責任分離、clients.pyでのAPI管理分離
 - **ID生成統一**: generate_unique_id()による6箇所統一、将来の拡張性確保（数字ID等への変更容易）
 - **コード品質**: should_include_message()関数による条件分岐簡素化、テスタビリティ向上
 - **テスト**: pytest + asyncio対応、curlによる動作確認、適切なテストパターン
 - **リント**: Ruff（Python）+ Biome（TypeScript）による統一品質管理
 - **依存関係**: uv（Python）+ npm（Node.js）による効率的パッケージ管理
+- **コンポーネント設計**: Page接尾辞削除による簡潔な命名、認証ロジックの適切な分離
 
 ## Phase1実装テスト手順（2025年8月）
 
