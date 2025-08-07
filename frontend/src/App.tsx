@@ -1,10 +1,10 @@
 import type React from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import LoginForm from './auth/LoginForm';
 import ProtectedRoute from './auth/ProtectedRoute';
-import ChatApp from './ChatApp';
-import NotFoundPage from './components/NotFoundPage';
+import ChatPage from './pages/ChatPage';
+import LoginPage from './pages/LoginPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 // ログインページ用のコンポーネント（認証済みの場合はリダイレクト）
 const LoginRoute: React.FC = () => {
@@ -26,7 +26,7 @@ const LoginRoute: React.FC = () => {
     return <Navigate to={from} replace />;
   }
 
-  return <LoginForm />;
+  return <LoginPage />;
 };
 
 // メインAppコンポーネント
@@ -39,7 +39,7 @@ const App: React.FC = () => {
           path="/"
           element={
             <ProtectedRoute>
-              <ChatApp />
+              <ChatPage />
             </ProtectedRoute>
           }
         />
@@ -47,7 +47,7 @@ const App: React.FC = () => {
           path="/chat/:conversationId?"
           element={
             <ProtectedRoute>
-              <ChatApp />
+              <ChatPage />
             </ProtectedRoute>
           }
         />

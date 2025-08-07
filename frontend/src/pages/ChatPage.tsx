@@ -1,19 +1,19 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import './styles/App.css';
-import { useAuth } from './auth/AuthContext';
-import MarkdownRenderer from './components/MarkdownRenderer';
-import type { Conversation, Message, StreamingMessage } from './types';
+import '../styles/App.css';
+import { useAuth } from '../auth/AuthContext';
+import MarkdownRenderer from '../components/MarkdownRenderer';
+import type { Conversation, Message, StreamingMessage } from '../types';
 import {
   findNextConversation,
   formatDate,
   formatTime,
   generateUserMessageId,
   parseMessageContent,
-} from './utils';
+} from '../utils';
 
-const ChatApp: React.FC = () => {
+const ChatPage: React.FC = () => {
   const { user, logout, token, isLoading: isAuthLoading } = useAuth();
   const { conversationId: urlConversationId } = useParams<{
     conversationId?: string;
@@ -91,7 +91,7 @@ const ChatApp: React.FC = () => {
         }
       }
     },
-    [token, navigate, fetchConversations]
+    [token, navigate]
   );
 
   /* ----------------------- SSE -------------------------- */
@@ -251,7 +251,14 @@ const ChatApp: React.FC = () => {
         fetchConversation(urlConversationId);
       }
     }
-  }, [isAuthLoading, token, urlConversationId, conversationId, fetchConversation]);
+  }, [
+    isAuthLoading,
+    token,
+    urlConversationId,
+    conversationId,
+    fetchConversation,
+    isCreatingNewChat,
+  ]);
 
   // URLクリア処理専用
   useEffect(() => {
@@ -808,4 +815,4 @@ const ChatApp: React.FC = () => {
   );
 };
 
-export default ChatApp;
+export default ChatPage;
