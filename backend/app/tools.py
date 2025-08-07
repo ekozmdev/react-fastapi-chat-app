@@ -37,6 +37,64 @@ def calculate(expression: str) -> str:
         return f"計算エラー: {str(e)}"
 
 
+@function_tool
+def web_search(query: str, max_results: int = 5) -> str:
+    """Web検索を実行します（Mock版）。
+
+    Args:
+        query: 検索クエリ
+        max_results: 最大結果数（デフォルト: 5）
+
+    Returns:
+        検索結果（マークダウン形式）
+    """
+    # Mock検索結果を生成
+    search_results = [
+        {
+            "title": f"{query}に関するサンプル記事1",
+            "url": f"https://example.com/search/{query.replace(' ', '-')}/1",
+            "description": f"{query}について詳しく解説したサンプル記事です。専門的な内容を含んでいます。",
+        },
+        {
+            "title": f"{query} - Wikipedia風記事",
+            "url": f"https://example.com/wiki/{query.replace(' ', '_')}",
+            "description": f"{query}の基本的な情報と背景について包括的に説明している百科事典風の記事です。",
+        },
+        {
+            "title": f"{query}のベストプラクティス",
+            "url": f"https://example.com/blog/{query.replace(' ', '-')}-best-practices",
+            "description": f"{query}に関するベストプラクティスやTipsをまとめたブログ記事です。",
+        },
+        {
+            "title": f"{query}入門ガイド",
+            "url": f"https://example.com/guide/{query.replace(' ', '-')}-guide",
+            "description": f"{query}の初心者向け入門ガイドです。基本から応用まで幅広くカバーしています。",
+        },
+        {
+            "title": f"{query}の最新動向",
+            "url": f"https://example.com/news/{query.replace(' ', '-')}-2025",
+            "description": f"2025年における{query}の最新動向やトレンドについて報告している記事です。",
+        },
+    ]
+
+    # max_resultsに基づいて結果を制限
+    limited_results = search_results[:max_results]
+
+    # マークダウン形式で結果を構築
+    markdown_output = f"# 検索結果: {query}\n\n"
+    markdown_output += f"検索クエリ「**{query}**」に対する結果 ({len(limited_results)}件):\n\n"
+
+    for i, result in enumerate(limited_results, 1):
+        markdown_output += f"## {i}. {result['title']}\n"
+        markdown_output += f"🔗 **URL**: {result['url']}\n\n"
+        markdown_output += f"📝 **概要**: {result['description']}\n\n"
+        markdown_output += "---\n\n"
+
+    markdown_output += "*注: これはMock検索結果です。実際のWeb検索ではありません。*"
+
+    return markdown_output
+
+
 # ==========================================
 # ツール拡張ガイド
 # ==========================================
@@ -50,8 +108,9 @@ def calculate(expression: str) -> str:
 AVAILABLE_TOOLS = [
     get_current_time,  # 現在時刻を取得
     calculate,  # 数式計算
+    web_search,  # Web検索（Mock版）
     # 新しいツールはここに追加してください
-    # 例: weather_tool, search_tool, etc.
+    # 例: weather_tool, etc.
 ]
 
 # ツール追加例（コメントアウト）
