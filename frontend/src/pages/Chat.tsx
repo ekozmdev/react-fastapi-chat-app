@@ -13,7 +13,7 @@ import {
   parseMessageContent,
 } from '../utils';
 
-const ChatPage: React.FC = () => {
+const Chat: React.FC = () => {
   const { user, logout, token, isLoading: isAuthLoading } = useAuth();
   const { conversationId: urlConversationId } = useParams<{
     conversationId?: string;
@@ -815,4 +815,4 @@ const ChatPage: React.FC = () => {
   );
 };
 
-export default ChatPage;
+export default Chat;

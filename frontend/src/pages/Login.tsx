@@ -2,7 +2,7 @@ import type React from 'react';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 
-const LoginPage: React.FC = () => {
+const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -106,4 +106,4 @@ const LoginPage: React.FC = () => {
   );
 };
 
-export default LoginPage;
+export default Login;

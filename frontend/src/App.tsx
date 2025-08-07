@@ -2,9 +2,9 @@ import type React from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import ProtectedRoute from './auth/ProtectedRoute';
-import ChatPage from './pages/ChatPage';
-import LoginPage from './pages/LoginPage';
-import NotFoundPage from './pages/NotFoundPage';
+import Chat from './pages/Chat';
+import Login from './pages/Login';
+import NotFound from './pages/NotFound';
 
 // ログインページ用のコンポーネント（認証済みの場合はリダイレクト）
 const LoginRoute: React.FC = () => {
@@ -26,7 +26,7 @@ const LoginRoute: React.FC = () => {
     return <Navigate to={from} replace />;
   }
 
-  return <LoginPage />;
+  return <Login />;
 };
 
 // メインAppコンポーネント
@@ -39,7 +39,7 @@ const App: React.FC = () => {
           path="/"
           element={
             <ProtectedRoute>
-              <ChatPage />
+              <Chat />
             </ProtectedRoute>
           }
         />
@@ -47,11 +47,11 @@ const App: React.FC = () => {
           path="/chat/:conversationId?"
           element={
             <ProtectedRoute>
-              <ChatPage />
+              <Chat />
             </ProtectedRoute>
           }
         />
-        <Route path="/not-found-error" element={<NotFoundPage />} />
+        <Route path="/not-found-error" element={<NotFound />} />
         {/* 存在しないパスは認証済みならルートへ、未認証ならログインへ */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
