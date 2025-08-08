@@ -1,5 +1,4 @@
 import json
-import uuid
 from datetime import UTC, datetime
 
 from agents import Agent, Runner
@@ -8,7 +7,6 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from openai.types.responses import (
-    ResponseFunctionCallArgumentsDeltaEvent,
     ResponseTextDeltaEvent,
 )
 from sqlalchemy.orm import Session
@@ -45,9 +43,6 @@ app.add_middleware(
 )
 
 
-
-
-
 # ---------- Dependency ----------
 # get_current_userは core/deps.pyに移動済み
 get_current_user = get_current_user_dep
@@ -56,7 +51,24 @@ get_current_user = get_current_user_dep
 # ---------- 認証エンドポイント ----------
 @app.post("/api/auth/login", response_model=Token)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
-    """ユーザーログイン"""
+    """
+    ユーザーログイン認証
+
+    メールアドレスとパスワードでユーザー認証を行い、JWTアクセストークンを発行します。
+
+    ## パラメータ
+    - **email**: ログイン用メールアドレス
+    - **password**: ログイン用パスワード
+
+    ## レスポンス
+    - **access_token**: JWT認証トークン
+    - **token_type**: トークン種別（bearer）
+    - **expires_in**: トークン有効期限（秒）
+
+    ## エラー
+    - **401**: 認証情報が無効またはアカウント無効
+    - **422**: リクエストデータ形式エラー
+    """
     user = authenticate_user(db, login_data.email, login_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Incorrect email or password")
@@ -74,7 +86,22 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/refresh", response_model=Token)
 async def refresh_token(current_user: User = Depends(get_current_user)):
-    """トークンリフレッシュ"""
+    """
+    JWTトークンリフレッシュ
+
+    現在有効なトークンを使用して新しいアクセストークンを発行します。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## レスポンス
+    - **access_token**: 新しいJWT認証トークン
+    - **token_type**: トークン種別（bearer）
+    - **expires_in**: トークン有効期限（秒）
+
+    ## エラー
+    - **401**: トークンが無効または期限切れ
+    """
     access_token = create_access_token(data={"sub": current_user.id})
     return {
         "access_token": access_token,
@@ -85,7 +112,24 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
 
 @app.get("/api/auth/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """現在のユーザー情報を取得"""
+    """
+    現在のユーザー情報取得
+
+    認証されたユーザーの詳細情報を取得します。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## レスポンス
+    - **id**: ユーザーID（UUID）
+    - **email**: メールアドレス
+    - **username**: ユーザー名
+    - **is_active**: アカウント有効状態
+    - **created_at**: アカウント作成日時
+
+    ## エラー
+    - **401**: トークンが無効または期限切れ
+    """
     return UserResponse(
         id=current_user.id,
         email=current_user.email,
@@ -101,7 +145,31 @@ async def update_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """ユーザー情報を更新"""
+    """
+    ユーザー情報更新
+
+    認証されたユーザーのユーザー名やパスワードを更新します。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## パラメータ
+    - **username**: 新しいユーザー名（オプション）
+    - **current_password**: 現在のパスワード（パスワード変更時必要）
+    - **new_password**: 新しいパスワード（オプション）
+
+    ## レスポンス
+    - **id**: ユーザーID（UUID）
+    - **email**: メールアドレス
+    - **username**: 更新後のユーザー名
+    - **is_active**: アカウント有効状態
+    - **created_at**: アカウント作成日時
+
+    ## エラー
+    - **400**: ユーザー名重複またはパスワード不一致
+    - **401**: トークンが無効または期限切れ
+    - **422**: リクエストデータ形式エラー
+    """
     # ユーザー名の更新
     if update_data.username is not None:
         # 重複チェック
@@ -140,7 +208,20 @@ async def update_user_info(
 
 @app.delete("/api/auth/logout")
 async def logout(current_user: User = Depends(get_current_user)):
-    """ログアウト（クライアント側でトークンを削除）"""
+    """
+    ユーザーログアウト
+
+    ユーザーをログアウトします。クライアント側でトークンを削除する必要があります。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## レスポンス
+    - **message**: ログアウト成功メッセージ
+
+    ## エラー
+    - **401**: トークンが無効または期限切れ
+    """
     return {"message": "Successfully logged out"}
 
 
@@ -152,6 +233,22 @@ async def logout(current_user: User = Depends(get_current_user)):
 async def create_conversation(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    """
+    新しい会話作成
+
+    認証されたユーザー用に新しい会話セッションを作成します。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## レスポンス
+    - **conversation_id**: 作成された会話ID（UUID）
+    - **created_at**: 作成日時
+    - **updated_at**: 更新日時
+
+    ## エラー
+    - **401**: トークンが無効または期限切れ
+    """
     conv = Conversation(user_id=current_user.id)
     db.add(conv)
     db.commit()
@@ -169,6 +266,29 @@ async def list_conversations(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    会話一覧取得
+
+    認証されたユーザーの会話一覧を更新日時降順で取得します。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## パラメータ
+    - **skip**: スキップする件数（デフォルト: 0）
+    - **limit**: 取得件数の上限（デフォルト: 20）
+
+    ## レスポンス
+    - **conversations**: 会話情報の配列
+      - **id**: 会話ID（UUID）
+      - **title**: 会話タイトル
+      - **created_at**: 作成日時
+      - **updated_at**: 更新日時
+      - **message_count**: メッセージ数
+
+    ## エラー
+    - **401**: トークンが無効または期限切れ
+    """
     convs = (
         db.query(Conversation)
         .filter(Conversation.user_id == current_user.id)
@@ -191,15 +311,39 @@ async def list_conversations(
     }
 
 
-
-
-
 @app.get("/api/conversations/{conversation_id}")
 async def get_conversation(
     conversation_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    特定会話の詳細取得
+
+    指定された会話IDの会話情報と全メッセージ履歴を取得します。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## パラメータ
+    - **conversation_id**: 取得する会話のID（UUID）
+
+    ## レスポンス
+    - **conversation**: 会話情報
+      - **id**: 会話ID（UUID）
+      - **title**: 会話タイトル
+      - **created_at**: 作成日時
+      - **updated_at**: 更新日時
+    - **messages**: メッセージ配列
+      - **id**: メッセージID（UUID）
+      - **role**: メッセージの役割（user/assistant/tool）
+      - **content**: メッセージ内容
+      - **timestamp**: 作成日時
+
+    ## エラー
+    - **404**: 指定された会話が見つからない
+    - **401**: トークンが無効または期限切れ
+    """
     conv = (
         db.query(Conversation)
         .filter(
@@ -234,6 +378,24 @@ async def delete_conversation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    会話削除
+
+    指定された会話とその全メッセージを完全に削除します。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## パラメータ
+    - **conversation_id**: 削除する会話のID（UUID）
+
+    ## レスポンス
+    - **message**: 削除成功メッセージ
+
+    ## エラー
+    - **404**: 指定された会話が見つからない
+    - **401**: トークンが無効または期限切れ
+    """
     conv = (
         db.query(Conversation)
         .filter(
@@ -250,7 +412,23 @@ async def delete_conversation(
 
 # ---------- Helper Functions ----------
 def should_include_message(message: Message) -> bool:
-    """メッセージをAPI履歴に含めるかを判定"""
+    """
+    メッセージをAPI履歴に含めるかを判定
+
+    Chat API送信用のメッセージ履歴を生成する際に、
+    不要なメッセージ（toolメッセージ、tool_calls付きassistantメッセージ）を除外します。
+
+    ## パラメータ
+    - **message**: 判定対象のメッセージオブジェクト
+
+    ## 戻り値
+    - **bool**: メッセージを含める場合True、除外する場合False
+
+    ## 判定ルール
+    - `role: "tool"`: 除外（AI応答に含めない）
+    - `role: "assistant"` with `tool_calls`: 除外（ツール呼び出しメタデータ）
+    - その他: 含める（通常の会話メッセージ）
+    """
     if message.role == "tool":
         return False
     if message.role == "assistant":
@@ -271,7 +449,34 @@ async def stream_chat(
     db: Session = Depends(get_db),
     chat_agent: Agent = Depends(get_chat_agent),
 ):
-    """SSEによるリアルタイムチャット"""
+    """
+    SSEストリーミングによるリアルタイムチャット
+
+    Server-Sent Events (SSE) を使用してリアルタイムでAIチャット応答をストリーミング配信します。
+    OpenAI Agents SDKによるツール実行もサポートし、ツール呼び出しの状況も即座に通知されます。
+
+    ## 認証
+    - **Authorization**: Bearer トークンが必要
+
+    ## パラメータ
+    - **conversation_id**: チャット会話のID（UUID、存在しない場合は自動作成）
+    - **message**: ユーザーからのメッセージ内容
+
+    ## レスポンス形式 (SSE)
+    - **data:**: JSON形式のストリーミングデータ
+      - `role: "assistant"`: AI応答テキスト（逐次送信）
+      - `role: "tool"`: ツール実行結果（完了時送信）
+    - **done:**: ストリーミング完了通知
+
+    ## 利用可能ツール
+    - **get_current_time**: 現在時刻取得
+    - **calculate**: 数学計算実行
+    - **web_search**: Web検索実行
+
+    ## エラー
+    - **401**: トークンが無効または期限切れ
+    - **422**: リクエストデータ形式エラー
+    """
 
     async def generate_sse_stream():
         try:
@@ -289,7 +494,6 @@ async def stream_chat(
                 conv = Conversation(id=conversation_id, user_id=current_user.id)
                 db.add(conv)
                 db.commit()
-
 
             # userメッセージはストリーミング前に必ず1回だけ保存
             user_msg = Message(
@@ -315,11 +519,9 @@ async def stream_chat(
             # Agents SDK でストリーミング実行（依存性注入されたagent使用）
             result = Runner.run_streamed(chat_agent, api_messages)
             async for event in result.stream_events():
-                
                 # ========== 高レベルイベント: ツール処理 ==========
                 if isinstance(event, RunItemStreamEvent):
-                    
-                    if event.name == 'tool_called':
+                    if event.name == "tool_called":
                         # ツール呼び出し開始 - ツール名を記録
                         try:
                             call_id = event.item.raw_item.call_id
@@ -329,43 +531,51 @@ async def stream_chat(
                         except (AttributeError, KeyError) as e:
                             print(f"[WARNING] tool_called属性アクセスエラー: {e}")
                             continue
-                        
-                    elif event.name == 'tool_output':
+
+                    elif event.name == "tool_output":
                         # ツール実行完了 - 直接出力を取得してSSE送信
                         try:
-                            call_id = event.item.raw_item['call_id']
+                            call_id = event.item.raw_item["call_id"]
                             output = event.item.output
                             tool_name = active_tools.get(call_id, "unknown")
-                            print(f"[DEBUG] Tool completed: {tool_name} with ID {call_id}, output: {output}")
+                            print(
+                                f"[DEBUG] Tool completed: {tool_name} with ID {call_id}, output: {output}"
+                            )
                         except (KeyError, TypeError) as e:
                             print(f"[WARNING] tool_output属性アクセスエラー: {e}")
                             continue
-                        
+
                         # Phase1仕様のrole:toolイベント送信
                         tool_content_dict = {
                             "tool_call_id": call_id,
                             "tool_name": tool_name,
                             "output": output,
-                            "status": "success"
+                            "status": "success",
                         }
-                        
+
                         tool_event = {
                             "role": "tool",
-                            "content": json.dumps(tool_content_dict, ensure_ascii=False),
+                            "content": json.dumps(
+                                tool_content_dict, ensure_ascii=False
+                            ),
                             "id": call_id,
-                            "timestamp": datetime.now(UTC).isoformat()
+                            "timestamp": datetime.now(UTC).isoformat(),
                         }
                         yield f"data: {json.dumps(tool_event, ensure_ascii=False)}\n\n"
-                        
+
                         # DB保存用データ保存
-                        sent_tool_messages.append({
-                            "role": "tool",
-                            "content": json.dumps(tool_content_dict, ensure_ascii=False)
-                        })
-                        
+                        sent_tool_messages.append(
+                            {
+                                "role": "tool",
+                                "content": json.dumps(
+                                    tool_content_dict, ensure_ascii=False
+                                ),
+                            }
+                        )
+
                         # 完了したツールを状態から削除
                         active_tools.pop(call_id, None)
-                
+
                 # ========== 低レベルイベント: テキスト処理 ==========
                 elif isinstance(event, RawResponsesStreamEvent):
                     if isinstance(event.data, ResponseTextDeltaEvent):
@@ -373,12 +583,12 @@ async def stream_chat(
                         content = event.data.delta
                         assistant_content += content
                         content_event = {
-                            "role": "assistant", 
+                            "role": "assistant",
                             "content": content,
-                            "id": assistant_id
+                            "id": assistant_id,
                         }
                         yield f"data: {json.dumps(content_event, ensure_ascii=False)}\n\n"
-                    
+
                     # ResponseFunctionCallArgumentsDeltaEventは完全無視
                     # → AI応答にツール引数JSONが混入する問題を根本解決
 
@@ -388,19 +598,16 @@ async def stream_chat(
                 db_message = Message(
                     conversation_id=conv.id,
                     role=tool_msg["role"],
-                    content=tool_msg["content"]
+                    content=tool_msg["content"],
                 )
                 db.add(db_message)
 
             # 最終的なassistantメッセージを保存（assistant_contentがある場合のみ）
             if assistant_content.strip():
                 db_message = Message(
-                    conversation_id=conv.id,
-                    role="assistant",
-                    content=assistant_content
+                    conversation_id=conv.id, role="assistant", content=assistant_content
                 )
                 db.add(db_message)
-
 
             # タイトル生成処理
             if not conv.title and len(conv.messages) > 0:
