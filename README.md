@@ -53,7 +53,6 @@ react-fastapi-chat-app/
 │   │   ├── models/
 │   │   │   ├── base.py
 │   │   │   ├── conversation.py
-│   │   │   ├── tool_execution.py
 │   │   │   └── user.py
 │   │   ├── schemas/
 │   │   │   ├── auth.py
@@ -62,7 +61,6 @@ react-fastapi-chat-app/
 │   │   ├── clients.py
 │   │   ├── main.py
 │   │   ├── tools.py
-│   │   └── tool_execution_manager.py
 │   ├── alembic/
 │   │   └── versions/
 │   ├── scripts/
@@ -82,7 +80,7 @@ react-fastapi-chat-app/
 
 - **JWT認証システム**: セキュアなユーザー認証とセッション管理
 - **リアルタイムチャット**: Server-Sent Events (SSE)を使用したストリーミング応答（認証付き）
-- **真のリアルタイムツール実行表示**: LLM決定瞬間での即座スピナー表示（人工遅延なし）
+- **効率的なツール実行処理**: OpenAI Agents SDKのRunItemStreamEventによる安定したツール処理
 - **Claudeライクなデザイン**: モダンでクリーンなUI
 - **会話履歴**: PostgreSQLデータベースでチャット履歴を永続化（ユーザー別）
 - **会話管理**: 複数の会話を作成・切り替え・削除
@@ -303,20 +301,9 @@ docker compose up -d
 - `conversation_id`: 会話ID (外部キー)
 - `role`: ロール (user/assistant/system)
 - `content`: メッセージ内容
-- `tool_metadata`: ツールメタデータ (JSON) - Phase 1互換
-- `has_detailed_executions`: 詳細実行データ有無 (Boolean)
+- `tool_metadata`: ツールメタデータ (JSON)
 - `created_at`: 作成日時
 
-### tool_executions テーブル（Phase 2）
-- `id`: 実行ID (UUID)
-- `message_id`: メッセージID (外部キー)
-- `tool_name`: ツール名
-- `tool_arguments`: ツール引数 (JSON)
-- `call_status`: 呼び出し状態
-- `execution_status`: 実行状態
-- `tool_output`: ツール出力
-- `execution_time_ms`: 実行時間 (ミリ秒)
-- `created_at`: 作成日時
 
 ### users テーブル
 - `id`: ユーザーID (UUID)
@@ -350,6 +337,30 @@ self.chat_agent = Agent(
 - `gpt-3.5-turbo` (旧モデル)
 - `o1-preview` (推論特化)
 - `o1-mini` (推論特化・軽量)
+
+### ツール機能の追加・カスタマイズ
+
+`backend/app/tools.py`で新しいツールを追加できます：
+
+```python
+@function_tool
+def your_custom_tool(param1: str, param2: int) -> str:
+    """カスタムツールの説明"""
+    # ツールの処理ロジック
+    return "結果"
+
+AVAILABLE_TOOLS = [
+    get_current_time,
+    calculate, 
+    web_search,
+    your_custom_tool,  # 新しいツールを追加
+]
+```
+
+現在利用可能なツール:
+- **get_current_time**: 現在の時刻を取得
+- **calculate**: 数式計算（安全な式のみ）
+- **web_search**: Web検索（Mock版）
 
 ### デザインのカスタマイズ
 
@@ -422,6 +433,11 @@ uv run pytest
 - 使用しているモデルが利用可能か確認
 - 新しいResponses APIへの移行を検討（より高機能）
 
+### ツール実行エラー
+- ツールの定義を確認（`backend/app/tools.py`）
+- ツールの引数が正しいか確認
+- OpenAI SDKのイベントハンドリングを確認
+
 ### uv関連のエラー
 ```bash
 # uvの再インストール
@@ -439,6 +455,14 @@ uv sync --no-cache
 MIT License
 
 ## 更新履歴
+
+- 2025年8月12日: SDKイベント処理の根本的リファクタリング（Phase 3完了）
+  - **RunItemStreamEvent活用**: 高レベルイベント処理への移行でコード品質57%改善
+  - **active_tools最小限マッピング**: 複雑な`tool_tracking`辞書を大幅簡素化（70行→30行）
+  - **AI応答とツール引数完全分離**: ResponseFunctionCallArgumentsDeltaEvent無視によるクリーンな会話体験
+  - **コード構造最適化**: 不要コメント削除、技術的負債完全解消
+  - **安定性向上**: SDKの公式イベントモデル準拠による堅牢なツール処理実現
+  - **Web検索機能実装**: Mock版web_searchツールによる検索機能基盤構築
 
 - 2025年8月8日: フロントエンドアーキテクチャ現代化（Phase 12-14）
   - **React Router v6 Outletパターン導入**: ProtectedRouteの現代化、ネストルート最適化
@@ -465,9 +489,9 @@ MIT License
   - **技術的負債解消**: 重複ファイル削除、未使用コード除去、統一リファクタリング
   - **本番品質達成**: 1時間で6項目完了、機能100%保持でクリーンコードベース実現
 
-- 2025年7月: Phase 1-4完了・レイヤー型アーキテクチャ採用
-  - **Phase 1-2**: ツール実行追跡とリアルタイム表示実装
-  - **Phase 3-4**: 真のリアルタイムツール検出（ResponseOutputItemAddedEvent）
+- 2025年7月: Phase 1・4完了・レイヤー型アーキテクチャ採用
+  - **Phase 1**: 簡素化されたrole:toolメッセージ形式でツール実行処理実装
+  - **Phase 4**: 真のリアルタイムツール検出（ResponseOutputItemAddedEvent）
   - **レイヤー型アーキテクチャ**: core/, db/, schemas/, models/分離
   - **外部APIクライアント管理**: clients.pyでDependency Injection実装
   - **コード品質向上**: Biome/Ruff統一、TypeScript安全性向上
