@@ -19,10 +19,8 @@ class APIClients:
 
     async def initialize(self):
         """クライアント初期化"""
-        # OpenAI クライアント初期化
         self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-        # Chat Agent 初期化
         self.chat_agent = Agent(
             name="ChatAssistant",
             instructions="""あなたは親切で知識豊富なアシスタントです。
@@ -42,10 +40,8 @@ class APIClients:
         """リソースクリーンアップ"""
         if self.openai_client:
             await self.openai_client.close()
-        # Chat Agent のクリーンアップ処理（必要に応じて）
 
 
-# グローバルインスタンス
 _clients_instance: APIClients | None = None
 
 

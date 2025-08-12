@@ -1,5 +1,5 @@
 """
-Phase 1: ツール機能実装
+ツール機能実装
 基本的なツール関数の定義と管理
 """
 
@@ -30,8 +30,8 @@ def calculate(expression: str) -> str:
         if not all(c in allowed_chars for c in expression):
             return "エラー: 許可されていない文字が含まれています"
 
-        # 安全な数式評価（evalを使用するが文字チェック済み）
-        result = eval(expression)
+        # 安全な数式評価（文字チェック済みのためevalを使用）
+        result = eval(expression)  # noqa: S307
         return f"{expression} = {result}"
     except Exception as e:
         return f"計算エラー: {str(e)}"
@@ -48,7 +48,6 @@ def web_search(query: str, max_results: int = 5) -> str:
     Returns:
         検索結果（マークダウン形式）
     """
-    # Mock検索結果を生成
     search_results = [
         {
             "title": f"{query}に関するサンプル記事1",
@@ -77,12 +76,12 @@ def web_search(query: str, max_results: int = 5) -> str:
         },
     ]
 
-    # max_resultsに基づいて結果を制限
     limited_results = search_results[:max_results]
 
-    # マークダウン形式で結果を構築
     markdown_output = f"# 検索結果: {query}\n\n"
-    markdown_output += f"検索クエリ「**{query}**」に対する結果 ({len(limited_results)}件):\n\n"
+    markdown_output += (
+        f"検索クエリ「**{query}**」に対する結果 ({len(limited_results)}件):\n\n"
+    )
 
     for i, result in enumerate(limited_results, 1):
         markdown_output += f"## {i}. {result['title']}\n"
@@ -95,28 +94,9 @@ def web_search(query: str, max_results: int = 5) -> str:
     return markdown_output
 
 
-# ==========================================
-# ツール拡張ガイド
-# ==========================================
-# 新しいツールを追加する場合:
-# 1. @function_tool デコレータを使って関数を定義
-# 2. 下記のAVAILABLE_TOOLSリストに関数を追加
-# 3. main.pyでの変更は不要（自動で反映されます）
-# ==========================================
-
-# 利用可能なツールリスト（新しいツールはここに追加）
+# 利用可能なツールリスト
 AVAILABLE_TOOLS = [
-    get_current_time,  # 現在時刻を取得
-    calculate,  # 数式計算
-    web_search,  # Web検索（Mock版）
-    # 新しいツールはここに追加してください
-    # 例: weather_tool, etc.
+    get_current_time,
+    calculate,
+    web_search,
 ]
-
-# ツール追加例（コメントアウト）
-# @function_tool
-# def example_tool(param: str) -> str:
-#     """新しいツールの例"""
-#     return f"処理結果: {param}"
-#
-# 上記を定義したら AVAILABLE_TOOLS に example_tool を追加

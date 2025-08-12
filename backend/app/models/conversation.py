@@ -17,7 +17,6 @@ class Conversation(Base):
         DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
     )
 
-    # リレーション
     user = relationship("User", back_populates="conversations")
     messages = relationship(
         "Message",
@@ -31,9 +30,8 @@ class Message(Base):
     __tablename__ = "messages"
     id = Column(String, primary_key=True, default=generate_unique_id)
     conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False)
-    role = Column(String, nullable=False)  # "user" | "assistant" | "tool"
-    content = Column(Text, nullable=False)  # user/assistant: プレーンテキスト、tool: JSON文字列
+    role = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
-    # リレーション
     conversation = relationship("Conversation", back_populates="messages")

@@ -43,12 +43,11 @@ app.add_middleware(
 )
 
 
-# ---------- Dependency ----------
-# get_current_userは core/deps.pyに移動済み
+# Dependency
 get_current_user = get_current_user_dep
 
 
-# ---------- 認証エンドポイント ----------
+# 認証エンドポイント
 @app.post("/api/auth/login", response_model=Token)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """
@@ -225,8 +224,7 @@ async def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Successfully logged out"}
 
 
-# ---------- REST ----------
-# 非ストリーミング実装は廃止済み（SSEストリーミングで代替）
+# REST
 
 
 @app.post("/api/conversations")
@@ -410,7 +408,7 @@ async def delete_conversation(
     return {"message": "deleted"}
 
 
-# ---------- Helper Functions ----------
+# Helper Functions
 def should_include_message(message: Message) -> bool:
     """
     メッセージをAPI履歴に含めるかを判定
@@ -440,7 +438,7 @@ def should_include_message(message: Message) -> bool:
     return True
 
 
-# ---------- SSE ----------
+# SSE
 @app.post("/api/chat/stream/{conversation_id}")
 async def stream_chat(
     conversation_id: str,
@@ -480,7 +478,6 @@ async def stream_chat(
 
     async def generate_sse_stream():
         try:
-            # 会話の取得または作成
             conv = (
                 db.query(Conversation)
                 .filter(
@@ -495,57 +492,42 @@ async def stream_chat(
                 db.add(conv)
                 db.commit()
 
-            # userメッセージはストリーミング前に必ず1回だけ保存
             user_msg = Message(
                 conversation_id=conv.id, role="user", content=request.message
             )
             db.add(user_msg)
             db.commit()
 
-            # API用メッセージ履歴を準備（toolメッセージは除外）
             api_messages = [
                 {"role": m.role, "content": m.content}
                 for m in conv.messages
                 if should_include_message(m)
             ]
 
-            # ストリーミング開始
             assistant_content = ""
             assistant_id = generate_unique_id()
-            # Phase3: 最小限の状態管理: call_id -> tool_name マッピング
-            active_tools = {}  # Dict[str, str] - call_id: tool_name
-            sent_tool_messages = []  # SSE送信したrole:toolメッセージを保存（DB保存用）
+            active_tools = {}  # call_id -> tool_name マッピング
+            sent_tool_messages = []  # DB保存用ツールメッセージ
 
-            # Agents SDK でストリーミング実行（依存性注入されたagent使用）
+            # ストリーミング実行
             result = Runner.run_streamed(chat_agent, api_messages)
             async for event in result.stream_events():
-                # ========== 高レベルイベント: ツール処理 ==========
                 if isinstance(event, RunItemStreamEvent):
                     if event.name == "tool_called":
-                        # ツール呼び出し開始 - ツール名を記録
                         try:
                             call_id = event.item.raw_item.call_id
                             tool_name = event.item.raw_item.name
                             active_tools[call_id] = tool_name
-                            print(f"[DEBUG] Tool called: {tool_name} with ID {call_id}")
-                        except (AttributeError, KeyError) as e:
-                            print(f"[WARNING] tool_called属性アクセスエラー: {e}")
+                        except (AttributeError, KeyError):
                             continue
 
                     elif event.name == "tool_output":
-                        # ツール実行完了 - 直接出力を取得してSSE送信
                         try:
                             call_id = event.item.raw_item["call_id"]
                             output = event.item.output
                             tool_name = active_tools.get(call_id, "unknown")
-                            print(
-                                f"[DEBUG] Tool completed: {tool_name} with ID {call_id}, output: {output}"
-                            )
-                        except (KeyError, TypeError) as e:
-                            print(f"[WARNING] tool_output属性アクセスエラー: {e}")
+                        except (KeyError, TypeError):
                             continue
-
-                        # Phase1仕様のrole:toolイベント送信
                         tool_content_dict = {
                             "tool_call_id": call_id,
                             "tool_name": tool_name,
@@ -563,7 +545,6 @@ async def stream_chat(
                         }
                         yield f"data: {json.dumps(tool_event, ensure_ascii=False)}\n\n"
 
-                        # DB保存用データ保存
                         sent_tool_messages.append(
                             {
                                 "role": "tool",
@@ -572,14 +553,10 @@ async def stream_chat(
                                 ),
                             }
                         )
-
-                        # 完了したツールを状態から削除
                         active_tools.pop(call_id, None)
 
-                # ========== 低レベルイベント: テキスト処理 ==========
                 elif isinstance(event, RawResponsesStreamEvent):
                     if isinstance(event.data, ResponseTextDeltaEvent):
-                        # テキスト応答のみ処理（AI応答のストリーミング）
                         content = event.data.delta
                         assistant_content += content
                         content_event = {
@@ -589,11 +566,6 @@ async def stream_chat(
                         }
                         yield f"data: {json.dumps(content_event, ensure_ascii=False)}\n\n"
 
-                    # ResponseFunctionCallArgumentsDeltaEventは完全無視
-                    # → AI応答にツール引数JSONが混入する問題を根本解決
-
-            # メッセージ保存
-            # SSE送信したツールメッセージを保存
             for tool_msg in sent_tool_messages:
                 db_message = Message(
                     conversation_id=conv.id,
@@ -602,14 +574,12 @@ async def stream_chat(
                 )
                 db.add(db_message)
 
-            # 最終的なassistantメッセージを保存（assistant_contentがある場合のみ）
             if assistant_content.strip():
                 db_message = Message(
                     conversation_id=conv.id, role="assistant", content=assistant_content
                 )
                 db.add(db_message)
 
-            # タイトル生成処理
             if not conv.title and len(conv.messages) > 0:
                 first_user_msg = next(
                     (m for m in conv.messages if m.role == "user"), None
@@ -645,7 +615,7 @@ async def stream_chat(
     )
 
 
-# ---------- run ----------
+# Run
 def start():
     import uvicorn
 
