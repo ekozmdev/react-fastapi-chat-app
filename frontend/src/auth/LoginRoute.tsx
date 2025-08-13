@@ -1,12 +1,9 @@
 import type React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import Login from '../pages/Login';
 import { useAuth } from './AuthContext';
 
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-}
-
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+const LoginRoute: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
@@ -19,12 +16,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  if (!isAuthenticated) {
-    // ログイン後に元のページに戻れるよう現在のURLを保存
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  if (isAuthenticated) {
+    // ログイン前にいたページに戻るか、デフォルトでルートに
+    const from = location.state?.from?.pathname || '/';
+    return <Navigate to={from} replace />;
   }
 
-  return <>{children}</>;
+  return <Login />;
 };
 
-export default ProtectedRoute;
+export default LoginRoute;

@@ -75,7 +75,7 @@ class Settings:
     DB_NAME: str = validate_required_env("DB_NAME")
 
     @property
-    def DATABASE_URL(self) -> str:
+    def DATABASE_URL(self) -> str:  # noqa: N802
         """個別コンポーネントから動的にDATABASE_URLを構築"""
         return f"{self.DB_PROTOCOL}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 

@@ -39,7 +39,7 @@ add-bounds="major"
 [tool.ruff]
 line-length = 88
 indent-width = 4
-target-version = "py312"
+target-version = "py313"
 # alembic/versions配下はruffの対象外にする
 exclude = [
     "alembic/versions/*",

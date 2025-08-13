@@ -1,28 +1,6 @@
 import type React from 'react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-
-// 型定義
-interface User {
-  id: string;
-  email: string;
-  username: string;
-  is_active: boolean;
-  created_at: string;
-}
-
-interface AuthState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-}
-
-interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  refreshToken: () => Promise<boolean>;
-  updateUser: (userData: Partial<User>) => void;
-}
+import type { AuthContextType, AuthState, User } from '../types';
 
 // コンテキスト作成
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
