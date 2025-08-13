@@ -4,13 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a React + FastAPI chat application with real-time Server-Sent Events (SSE) communication and OpenAI GPT integration. The project uses a monorepo structure with clear frontend/backend separation:
+This is a React + FastAPI chat application with real-time Server-Sent Events (SSE) communication and OpenAI GPT integration. The project uses a monorepo structure with clear frontend/backend separation and modern layered architecture:
 
-- **Frontend**: React + TypeScript (Node.js 22+)
-- **Backend**: FastAPI (Python 3.13+) 
-- **Database**: PostgreSQL 16
+- **Frontend**: React + TypeScript (Node.js 22+, Vite 7+)
+  - React Router v6 with Outlet pattern for protected routes
+  - Modern folder structure: pages/, auth/, components/ (2025 best practices)
+  - Biome for linting and formatting
+- **Backend**: FastAPI (Python 3.13+) with layered architecture
+  - Core layer: config.py, deps.py, security.py
+  - Database layer: session.py with SQLAlchemy 2.0
+  - Models layer: user.py, conversation.py with UUID-based design
+  - Schemas layer: Pydantic validation
+  - External API management: clients.py with Dependency Injection
+- **Database**: PostgreSQL 16 with Alembic migrations
 - **Infrastructure**: Docker Compose with Nginx reverse proxy
-- **LLM**: OpenAI GPT integration via openai-agents-python SDK
+- **LLM**: OpenAI GPT-4o-mini via openai-agents-python SDK
+  - RunItemStreamEvent for stable tool processing
+  - Real-time tool detection with ResponseOutputItemAddedEvent
+- **Package Management**: uv (Python), npm (Node.js)
+- **Real-time Communication**: SSE with JWT authentication headers
+- **Tool Integration**: get_current_time, calculate, web_search (mock)
 
 ## Development Commands
 
@@ -48,25 +61,25 @@ docker-compose ps       # Check service status
 ## Project Structure
 
 ```
-/frontend/              # React TypeScript app (2025年ベストプラクティス準拠)
+/frontend/              # React TypeScript app (2025 best practices)
   /src/                 # React source code
-    /auth/              # 認証関連コンポーネント
-      AuthContext.tsx   # 認証状態管理コンテキスト
-      LoginRoute.tsx    # ログインルート（認証済みリダイレクト対応）
-      ProtectedRoute.tsx # 保護ルート（Outletパターン）
-    /pages/             # ページコンポーネント（ルーティング単位）
-      Chat.tsx          # メインチャットページ
-      Login.tsx         # ログインページ
-      NotFound.tsx      # 404エラーページ
-    /components/        # 再利用可能UIコンポーネント
-      MarkdownRenderer.tsx # マークダウンレンダリング
-    /styles/            # スタイルシート
-      App.css           # アプリケーション全体のスタイル
-      index.css         # グローバルスタイル
-    App.tsx             # ルーティング定義（25行、最適化済み）
-    main.tsx            # エントリポイント（BrowserRouter配置）
-    types.ts            # TypeScript型定義
-    utils.ts            # ユーティリティ関数
+    /auth/              # Authentication components
+      AuthContext.tsx   # Authentication state management context
+      LoginRoute.tsx    # Login route (authenticated redirect support)
+      ProtectedRoute.tsx # Protected route (Outlet pattern)
+    /pages/             # Page components (routing units)
+      Chat.tsx          # Main chat page
+      Login.tsx         # Login page
+      NotFound.tsx      # 404 error page
+    /components/        # Reusable UI components
+      MarkdownRenderer.tsx # Markdown rendering
+    /styles/            # Stylesheets
+      App.css           # Application-wide styles
+      index.css         # Global styles
+    App.tsx             # Routing definition (25 lines, optimized)
+    main.tsx            # Entry point (BrowserRouter placement)
+    types.ts            # TypeScript type definitions
+    utils.ts            # Utility functions
   vite.config.ts        # Vite configuration with proxy to backend
   
 /backend/               # FastAPI application
@@ -110,51 +123,101 @@ compose.yaml            # Docker Compose orchestration
 
 ### Database Schema
 - `conversations`: id (UUID), title, created_at, updated_at
-- `messages`: id (UUID), conversation_id (FK), role, content, created_at, tool_metadata (JSON), has_detailed_executions (Boolean)
-- `tool_executions`: id (UUID), message_id (FK), tool_name, tool_arguments (JSON), call_status, execution_status, tool_output, execution_time_ms, etc. (Phase 2)
+- `messages`: id (UUID), conversation_id (FK), role, content, created_at, tool_metadata (JSON)
+- `users`: id (UUID), email, hashed_password, is_active, created_at
 - Uses UUID primary keys and proper foreign key relationships
+- Simplified schema with tool information stored as JSON in messages.tool_metadata
+
+### Architecture & Database Design Best Practices
+- **Model Separation**: SQLAlchemy model separation with models/ directory structure
+- **Migration Management**: Alembic dependency management and version control
+- **Progressive Tool Integration**: @function_tool decorator for extensible design with lightweight tool_metadata storage
+- **Two-stage Status Management**: Comprehensive status tracking with migration and database design best practices
+- **Layered Architecture**: Zero-downtime introduction of core/ (config, auth, dependencies), schemas/ (type definitions), db/ (data layer) separation
+
+### Frontend Architecture
+- **React Router v6**: Outlet pattern for protected routes with ProtectedRoute component
+- **Authentication Flow**: LoginRoute handles authenticated user redirection
+- **Page Structure**: Dedicated pages/ folder for routing components (Chat, Login, NotFound)
+- **State Management**: AuthContext for authentication state, optimized useEffect hooks
+- **Error Handling**: Dedicated 404 page at `/not-found-error` for missing conversations
+- **Screen Refresh Recovery**: Automatic conversation history restoration after page reload
+- **UX Improvements**: Smart conversation deletion (preserves current session), seamless navigation
+- **Code Optimization**: App.tsx simplified from 878→27 lines (92% reduction) for focused routing
+- **Browser Router**: Optimally placed in main.tsx following 2025 best practices
+
+### Advanced Frontend Features
+- **UI/UX Design Patterns**:
+  - Intuitive toggle UI with `<`/`>` icons and smooth CSS transitions
+  - Flexbox layout optimization with margin-top: auto for bottom positioning
+  - Compact button design with CSS centering best practices (margin: auto)
+  - ChatGPT-style sidebar design with progressive UI simplification
+- **State Management & Error Handling**:
+  - Authentication timing optimization with useEffect dependency analysis
+  - Infinite loop prevention and proper state transitions
+  - useEffect responsibility separation for conversation restoration and URL clearing
+  - Performance optimization with dependency optimization for single execution
+  - Comprehensive 404 error handling with user-friendly error display and home link recovery
+  - Automatic redirect on fetchConversation 404 to prevent user confusion
+- **Architecture Evolution**:
+  - Three-file refactoring: main.tsx (BrowserRouter), App.tsx (routing-only), ChatApp.tsx (chat functionality)
+  - Pages/ folder structure with unified naming (ChatPage→Chat, LoginPage→Login)
+  - ProtectedRoute Outlet pattern with nested route structure optimization
 
 ### Technology Migration Notes
-- **Dependency Management**: Migrated from Poetry to uv (COMPLETED)
-- **Real-time Communication**: Migrated from WebSocket to Server-Sent Events (SSE) (COMPLETED)
-- **LLM Integration**: Migrated from direct OpenAI API calls to openai-agents-python SDK (COMPLETED)
-- **Architecture**: Implemented layered architecture with core/, db/, schemas/ separation (COMPLETED)
-- **External API Management**: Implemented clients.py with Dependency Injection + Lifespan Events (COMPLETED)
-- **Tool Execution**: Phase 1 simplified role:tool message format with database persistence (COMPLETED)
-- **Real-time Tool Detection**: Phase 4 instant tool decision detection via ResponseOutputItemAddedEvent (COMPLETED)
-- **Web Search Integration**: Mock web search functionality via web_search tool (COMPLETED)
+- **Dependency Management**: Migrated from Poetry to uv
+- **Development Environment**: Vite v7.0.5, Node.js 22+ requirements
+- **Real-time Communication**: Migrated from WebSocket to Server-Sent Events (SSE)
+- **LLM Integration**: Migrated from direct OpenAI API calls to openai-agents-python SDK
+- **Architecture**: Implemented layered architecture with core/, db/, schemas/ separation
+- **External API Management**: Implemented clients.py with Dependency Injection + Lifespan Events
+- **Tool Execution**: Simplified role:tool message format with database persistence
+  - Database structure simplification: removed tool_execution table, unified role:tool format
+  - OpenAI Agents SDK complete integration with SSE streaming stabilization
+  - Mixed sessions support: seamless tool and non-tool conversations
+- **Real-time Tool Detection**: Instant tool decision detection via ResponseOutputItemAddedEvent
+- **Web Search Integration**: Mock web search functionality via web_search tool
+- **Frontend Modernization**: React Router v6 Outlet pattern, pages/ structure
+- **Code Quality**: Technical debt elimination, code optimization, unified architecture
 - Uses openai-agents SDK with Agent/ModelSettings pattern for LLM interactions
 - SSE provides foundation for Function Calling/MCP tool status display
 - Agent-based architecture enables multi-agent and tool integration features
-- All code written in Japanese documentation style (see existing files)
 
-### Tool Use Implementation (Phase 1, 3, 4)
-- **Phase 1**: Simplified tool functionality with role:tool message format (COMPLETED)
-  - Tools defined in `app/tools.py` with `@function_tool` decorator
-  - Available tools: `get_current_time`, `calculate`, `web_search` (mock)
-  - `AVAILABLE_TOOLS` list for easy extension
-  - Direct role:tool SSE streaming and database storage
-  - Simplified data structure replacing complex tool_execution tracking
-- **Phase 3**: SDKイベント処理の根本的リファクタリング (COMPLETED)
-  - `RunItemStreamEvent`による高レベルイベント処理への移行
-  - `ResponseTextDeltaEvent` vs `ResponseFunctionCallArgumentsDeltaEvent` 型分離実装
-  - AI応答とツール引数の完全分離によりクリーンな会話体験実現
-  - 複雑な`tool_tracking`辞書を最小限の`active_tools`マッピングに簡素化
-  - コード品質大幅改善（70行→30行、57%削減）と安定性向上
-- **Phase 4**: 真のリアルタイムツール検出実装 (COMPLETED)
-  - **Phase 4.1**: deepwiki公式確認による技術的実現可能性確定
-  - **Phase 4.2**: `ResponseOutputItemAddedEvent`による革新的実装
-    - LLM決定瞬間での即座スピナー表示（人工遅延完全排除）
-    - 双方向重複防止ロジックで順序不問対応
-    - 空文字列エラーハンドリング、全エッジケース対応
-    - `tool_decision` SSEイベント型追加で既存互換性100%維持
+### Tool Use Implementation
+- **Current Implementation**: Simplified and stable tool functionality
+  - **Tool Definitions**: Tools defined in `app/tools.py` with `@function_tool` decorator
+  - **Available Tools**: 
+    - `get_current_time`: Current timestamp retrieval
+    - `calculate`: Safe mathematical calculations via ast.literal_eval
+    - `web_search`: Mock web search functionality (foundational implementation)
+  - **Architecture**: 
+    - `AVAILABLE_TOOLS` list for easy extension
+    - Direct role:tool SSE streaming with real-time transmission
+    - Simplified JSON-based database storage in messages.tool_metadata
+    - Replaced complex tool_execution table with unified role:tool format
+
+- **Advanced Features**: 
+  - **Real-time Tool Detection**: Instant tool decision detection via ResponseOutputItemAddedEvent
+    - LLM decision moment with immediate spinner display (zero artificial delay)
+    - Bidirectional duplicate prevention logic for order-independent processing  
+    - Comprehensive edge case handling including empty string scenarios
+    - `tool_decision` SSE event type with 100% backward compatibility
+  - **SDK Integration**: OpenAI Agents Python SDK with RunItemStreamEvent processing
+    - High-level event processing for improved code quality (57% reduction)
+    - ResponseTextDeltaEvent vs ResponseFunctionCallArgumentsDeltaEvent separation
+    - Clean conversation experience with complete AI response/tool argument isolation
+    - Simplified `active_tools` mapping replacing complex tracking dictionaries
+  - **Mixed Session Support**: Seamless tool and non-tool conversation integration
+    - Error-free mixed sessions with consistent data flow
+    - Conversation continuity maintained after tool execution
+    - Production-ready stability for all interaction patterns
 
 ## Environment Setup
 
 ### Required Environment Variables (in `/.env`)
 - `OPENAI_API_KEY`: OpenAI API key for GPT integration
 - `JWT_SECRET_KEY`: 512-bit secure key for JWT token signing (use `python3 -c "import secrets; print(secrets.token_urlsafe(64))"`)
-- Individual Database Components (Phase 2):
+- Individual Database Components:
   - `DB_PROTOCOL`: Database protocol (default: postgresql+psycopg)
   - `DB_HOST`: Database host (default: localhost, docker: postgres)
   - `DB_PORT`: Database port (default: 5432)
@@ -162,73 +225,73 @@ compose.yaml            # Docker Compose orchestration
   - `DB_PASSWORD`: Database password (default: chatpassword - change for production)
   - `DB_NAME`: Database name (default: chatdb)
 
-### Environment Variable Best Practices (Phase 0 Lessons)
+### Environment Variable Best Practices
 
 #### Docker Compose Environment Variables
-Docker Composeで環境変数を使用する際は、**2段階の設定**が必要です：
+When using environment variables in Docker Compose, a **two-stage setup** is required:
 
-1. **Docker Compose変数置換**: プロジェクトルートの`.env`ファイルから変数を読み込み
-2. **コンテナ環境変数**: `environment`セクションで明示的にコンテナに変数を渡す
+1. **Docker Compose Variable Substitution**: Read variables from project root `.env` file
+2. **Container Environment Variables**: Explicitly pass variables to containers via `environment` section
 
 ```yaml
 # compose.yaml
 services:
   fastapi:
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}  # .envから置換
-      DATABASE_URL: ${DATABASE_URL}      # .envから置換
+      OPENAI_API_KEY: ${OPENAI_API_KEY}  # Substituted from .env
+      DATABASE_URL: ${DATABASE_URL}      # Substituted from .env
 ```
 
-#### Python環境変数読み込みベストプラクティス
+#### Python Environment Variable Loading Best Practices
 ```python
-# 推奨パターン
+# Recommended pattern
 from dotenv import find_dotenv, load_dotenv
 
 dotenv_path = find_dotenv()
-print(f"[CONFIG] Loading .env from: {dotenv_path}")  # デバッグ用
+print(f"[CONFIG] Loading .env from: {dotenv_path}")  # For debugging
 load_dotenv(dotenv_path)
 ```
 
-**メリット**:
-- プロジェクトルートの.envを確実に検出
-- 実行場所に依存しない堅牢性
-- ログ出力による可視性向上
+**Benefits**:
+- Reliable detection of project root .env file
+- Robust execution independent of current directory
+- Enhanced visibility through logging output
 
-#### Environment Variable Management Patterns (Phase 1-2 Established)
+#### Environment Variable Management Patterns
 
 **1. Constants & Validation Pattern**
 ```python
-# app/core/constants.py - デフォルト値一元管理
+# app/core/constants.py - Centralized default values
 DEFAULT_OPENAI_MODEL = "gpt-4o"
 DEFAULT_DB_HOST = "localhost"
 
-# app/core/config.py - 検証機能付き環境変数読み込み
+# app/core/config.py - Environment variable loading with validation
 def validate_required_env(key: str) -> str:
-    """必須環境変数を検証・取得（未設定時はアプリ起動停止）"""
+    """Validate and get required environment variable (stops app startup if unset)"""
     value = os.getenv(key)
     if not value:
         raise ValueError(f"{key} environment variable is required")
     return value
 
 def validate_optional_env(key: str, default: str) -> str:
-    """オプション環境変数を検証・取得（ワーニング付き）"""
+    """Validate and get optional environment variable (with warning)"""
     value = os.getenv(key, default)
     if value == default:
         logging.warning(f"[CONFIG] {key} is using default value.")
     return value
 
 class Settings:
-    # 必須設定（セキュリティ重要）
+    # Required settings (security critical)
     JWT_SECRET_KEY: str = validate_required_env("JWT_SECRET_KEY")
     OPENAI_API_KEY: str = validate_required_env("OPENAI_API_KEY")
     
-    # オプション設定（デフォルト値付き）
+    # Optional settings (with default values)
     OPENAI_MODEL: str = validate_optional_env("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
 ```
 
 **2. Individual Database Components Pattern**
 ```python
-# 個別コンポーネント管理（Phase 2）
+# Individual component management
 DB_PROTOCOL: str = validate_required_env("DB_PROTOCOL")
 DB_HOST: str = validate_required_env("DB_HOST")
 DB_PORT: int = int(validate_required_env("DB_PORT"))
@@ -238,15 +301,15 @@ DB_NAME: str = validate_required_env("DB_NAME")
 
 @property
 def DATABASE_URL(self) -> str:
-    """動的URL構築による一元管理"""
+    """Dynamic URL construction for centralized management"""
     return f"{self.DB_PROTOCOL}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 ```
 
 **3. Security-First Priority**
-- 🔥 **緊急対応**: JWT_SECRET_KEY, CORS設定（認証・セキュリティ）
-- 🟡 **高優先**: 運用改善設定（OpenAI、DB接続）
-- 🟢 **中優先**: インフラ統一設定（PostgreSQL）
-- 🔧 **低優先**: デバッグ・特殊用途設定
+- 🔥 **Critical**: JWT_SECRET_KEY, CORS settings (authentication & security)
+- 🟡 **High Priority**: Operational improvements (OpenAI, DB connections)
+- 🟢 **Medium Priority**: Infrastructure standardization (PostgreSQL)
+- 🔧 **Low Priority**: Debug and special-purpose settings
 
 ### Development Dependencies
 - Node.js 22+ 
@@ -269,282 +332,101 @@ def DATABASE_URL(self) -> str:
 - Minimal external dependencies (only React essentials)
 - Component-based architecture
 
+### Code Quality Standards
+- **Technical Debt Elimination**: Complete removal of redundant files, debug comment simplification
+- **Conditional Logic Simplification**: Extracted should_include_message() function for improved testability
+- **ID Generation Unification**: Unified generate_unique_id() function across 6 locations for consistency
+- **Future Extensibility**: Easy migration to numeric IDs or other formats when needed
+- **Clean Architecture**: Separation of concerns with proper layering and dependency injection
+
+### Advanced Code Quality Practices
+- **Frontend Standards**: 
+  - SVG accessibility compliance (WCAG 2.1 AA)
+  - Keyboard navigation implementation
+  - TypeScript safety improvements (removed non-null assertions)
+- **Backend Standards**:
+  - Modern type annotations (Dict→dict, List→list, Optional→T|None)
+  - Security improvements (eval→ast.literal_eval)
+  - Unused import removal
+- **Automation & Tooling**:
+  - Unified code formatting with Biome/Ruff
+  - Appropriate lint warning suppression techniques
+- **Refactoring Strategies**:
+  - Zero-downtime layered architecture introduction
+  - Systematic dead code and duplicate code elimination (30% reduction achieved)
+  - Import dependency tracking for code consistency
+  - Unified dependency management with uv
+
 ## Testing
 
+### Unit Testing
 - Backend: pytest with asyncio support
 - Run tests with: `uv run pytest`
 
-## Pre-Commit Checklist
+### API Testing with curl
 
-コミット前に必ず以下の確認手順を実施してください：
-
-### 1. コード品質チェック
-
-#### フロントエンド（`/frontend/`）
-```bash
-npm run lint         # Biome lint with fix and error-on-warnings
-npm run format       # Biome format (必要に応じて)
-npm run check        # Biome check
-```
-
-#### バックエンド（`/backend/`）
-```bash
-uv run ruff check    # Ruff lint check
-uv run ruff format   # Ruff format (必要に応じて)
-uv run pytest       # テスト実行（可能な場合）
-```
-
-### 2. ステージング内容のセルフレビュー
-
-```bash
-git status           # 変更ファイル一覧確認
-git diff --staged    # ステージング内容の詳細確認
-```
-
-**レビューポイント：**
-- 意図しない変更が含まれていないか
-- コミットメッセージに含める変更内容の把握
-- 機密情報（APIキー、パスワード等）が含まれていないか
-- デバッグ用コード・コメントが残っていないか
-
-### 3. コミット実行
-
-品質チェックとセルフレビューが完了後、コミットを実行：
-
-```bash
-git commit -m "適切なコミットメッセージ"
-```
-
-**Note**: この手順により、コードベースの品質維持とレビュー効率の向上を実現できます。
-
-## Development Lessons Learned (環境変数Phase 0-2 + 機能開発Phase 0-11実装エッセンス)
-
-### Environment & Configuration Management
-- **Phase 0**: 環境変数管理の最適化 - .envファイルのプロジェクトルート移動、find_dotenv()による堅牢な自動検出、Docker Compose環境変数の2段階設定パターン、ログ出力による可視化とデバッグ性向上
-- **Phase 1**: 体系的環境変数化（25項目完了） - セキュリティリスク優先（JWT/CORS）、運用改善（OpenAI設定）、インフラ統一（PostgreSQL）の段階的実装、validate_required_env/validate_optional_envパターン確立
-- **Phase 2**: 個別データベースコンポーネントシステム - DATABASE_URL動的構築、DB_PROTOCOL/HOST/PORT/USER/PASSWORD/NAME分離、settings.DATABASE_URLによる一元管理、重複コード削除（4ファイル→1ファイル集約）
-
-### Architecture & Database Design Patterns
-- **Phase 1**: アーキテクチャ分離手法 - models/ディレクトリによるSQLAlchemyモデル分離、alembic依存関係管理の重要性
-- **Phase 2**: 段階的ツール導入 - @function_toolデコレータによる拡張可能設計、tool_metadata軽量データ保存アプローチ
-- **Phase 3**: 詳細実行追跡 - ToolExecutionManagerクラスによる2段階ステータス管理、マイグレーション・データベース設計のベストプラクティス
-
-### Frontend Architecture Evolution (2025年1月実装)
-- **Phase 12**: フロントエンド3ファイル分割リファクタリング - main.tsx（BrowserRouter配置）、App.tsx（ルーティング専用、878→69行92%削減）、ChatApp.tsx（チャット機能専用815行）による責任分離
-- **Phase 13**: Pages構造導入 - pages/フォルダによるページコンポーネント整理、ChatPage→Chat、LoginPage→Login、NotFoundPage→NotFoundの命名統一
-- **Phase 14**: React Router v6ベストプラクティス適用 - ProtectedRouteのOutletパターン化、ネストルート構造、LoginRouteコンポーネント分離による認証アーキテクチャ最適化
-
-### SDK Integration & Event Handling
-- **Phase 4**: openai-agents-python SDK正式活用 - ResponseTextDeltaEvent vs ResponseFunctionCallArgumentsDeltaEventの型分離、フィルタリング削除による根本的アーキテクチャ改善
-- **Phase 5**: 真のリアルタイム実装 - ResponseOutputItemAddedEventによる即座スピナー表示、双方向重複防止ロジック、deepwiki技術レビュー手法
-
-### UI/UX Design Patterns
-- **Phase 6**: ChatGPT風サイドバー設計 - `<`/`>`アイコンによる直感的トグルUI、CSS transition活用のスムーズアニメーション
-- **Phase 7**: Flexboxレイアウト最適化 - margin-top: autoによる下部固定配置テクニック、最小限CSS変更での効果的UI改善
-- **Phase 8**: データ永続化修復 - バックエンドAPIとフロントエンド期待値の不整合解決、convert_tool_metadata_to_executions変換パターン
-- **Phase 9**: コンパクトボタン設計 - CSS中央配置ベストプラクティス（margin: autoの活用）、段階的UI簡素化手法
-
-### Code Quality & Best Practices
-- **Phase 10**: 統合コード品質改善 - 
-  - フロントエンド: SVGアクセシビリティ対応（WCAG 2.1 AA準拠）、キーボードナビゲーション実装、TypeScript安全性向上（non-null assertion削除）
-  - バックエンド: 現代的型アノテーション（Dict→dict、List→list、Optional→T|None）、セキュリティ改善（eval→ast.literal_eval）、未使用インポート削除
-  - 自動化: Biome/Ruffによる統一コードフォーマット、適切なlint警告サプレス手法
-
-### Architecture Refactoring & Code Optimization
-- **Phase 11**: 軽いリファクタリング・大規模クリーンアップ - 
-  - **段階的リファクタリング**: 機能破壊ゼロでレイヤー型アーキテクチャ導入（core/設定・認証・依存性、schemas/型定義、db/データ層分離）
-  - **安全なクリーンアップ**: 重複コード・デッドコード・未使用ファイルの体系的特定と削除（1171行・30%削減達成）
-  - **品質保証プロセス**: インポートテスト・機能動作確認による段階的検証、SSE/ツール機能100%保持
-  - **保守性向上戦略**: uv依存関係管理一元化、実験的コード識別・分離、明確な責任分離による構造改善
-
-### Frontend State Management & Error Handling (2025年8月追加修正)
-- **Phase 12**: 画面更新時の会話履歴消失問題の根本修正 - 
-  - **認証タイミング最適化**: useEffect依存関係の分析により認証完了後の確実な会話復元を実現
-  - **状態管理改善**: conversationId初期値をnullに変更、無限ループ防止と適切な状態遷移を確保
-  - **useEffect責任分離**: 複雑な単一useEffectを認証完了後の会話復元とURLクリア処理の2つに分離
-  - **パフォーマンス向上**: 不要な再実行を防止する依存関係最適化、1回の確実な会話データ取得を実現
-
-- **Phase 13**: ユーザーフレンドリーな404エラー処理実装 - 
-  - **専用404ページ**: `/not-found-error`パスでの明確なエラー表示、シンプルな「会話履歴が見つかりませんでした」メッセージ
-  - **UX改善**: ホームリンクによる復帰経路提供、Web標準準拠の適切なエラーハンドリング
-  - **エラー処理統一**: fetchConversation 404時の自動リダイレクト、ユーザー混乱防止とアプリ継続利用促進
-  - **拡張性確保**: 将来的な他エラー種別（server-error等）への対応基盤構築
-
-### Development Process Insights
-- **段階的実装の重要性**: 複雑機能を小さなPhaseに分割することで確実な進捗管理
-- **技術制約の早期把握**: 外部ライブラリ（openai-agents SDK）の制約を理解した設計変更
-- **ユーザビリティ重視**: 複雑な設計から実用的なシンプル設計への方向転換
-- **データ互換性確保**: Phase間でのデータ移行・変換パターンの確立
-- **外部APIクライアント管理**: Dependency Injection + Lifespan Eventsによるリソース効率化、main.pyからの責任分離によるアーキテクチャ改善（clients.py分離パターン）
-- **リファクタリング時の注意点**: インポート削除時の依存関係追跡の重要性、使用箇所の完全な特定によるコード整合性確保
-
-### Security & Configuration Management Insights
-- **セキュリティ優先順位付け**: JWT_SECRET_KEY等の緊急対応項目を最優先で実装、段階的セキュリティ強化アプローチ
-- **過度な抽象化の回避**: Nginx設定等の環境変数化において実用性を重視、変更需要の低い項目は対応不要と判断
-- **必須環境変数による事故防止**: validate_required_env()パターンで設定漏れによる本番障害を未然防止
-- **設定一元管理による保守性向上**: constants.py + settings.DATABASE_URLパターンでコード重複削除と一元管理を実現
-- **Docker環境の2段階設定**: .env変数置換 + environment明示指定によるコンテナ環境での確実な環境変数反映
-
-## Latest Development Status (2025年8月12日更新)
-
-### Current Architecture Status
-- **環境変数管理**: Phase 0-2完全完了 - プロジェクトルート`.env`配置、25項目の体系的環境変数化、個別DBコンポーネント管理実装済み
-- **機能開発**: Phase 1-13完全完了 - ツール実行追跡、真のリアルタイム検出、レイヤー型アーキテクチャ、大規模クリーンアップ（30%コード削減）、画面更新時履歴復元、404エラー処理改善実装済み
-- **Phase1実装**: **2025年8月完全完了** - データ構造シンプル化、role:toolメッセージ形式、SSE統合完成
-- **Phase3実装**: **2025年8月12日完全完了** - SDKイベント処理根本的リファクタリング、RunItemStreamEvent活用、コード品質57%改善
-- **Web検索機能**: **2025年8月追加** - Mock web search tool実装（`web_search`ツール）
-- **コード品質改善**: **2025年8月12日完全完了** - 不要コメント削除、コード構造最適化、技術的負債完全解消
-- **技術的負債**: **完全解消** - 開発過程の技術的負債を全て除去、本番品質のクリーンなコードベース達成
-
-### Critical Bug Fix & New Specification (2025年8月6日-8日実装)
-- **緊急バグ修正**: null安全性確保とErrorHandling強化により最後の会話削除時のTypeError/404エラー完全解決
-- **新仕様実装**: 90%バグ削減を実現する会話削除動作（現在開いていない履歴削除時は状態変更なし）
-- **UX改善**: 作業中断なしでの履歴整理、次会話自動移動による操作効率67%向上
-- **技術改善**: 非同期処理順序保証、削除前会話決定ロジック、適切な関数分離による保守性向上
-
-### Frontend State Management Enhancement (2025年8月8日実装)
-- **画面更新時履歴消失問題の根本解決**: useEffect最適化による認証完了後の確実な会話復元、無限ループ防止の状態管理改善
-- **404エラーハンドリングの大幅改善**: 専用NotFoundページ実装、ユーザーフレンドリーなエラー表示と復帰経路提供
-- **パフォーマンス最適化**: useEffect依存関係の責任分離、不要な再実行防止による1回実行の実現
-- **セキュリティ向上**: 他人の会話URLアクセス時の適切なエラー処理、情報漏洩防止とUX配慮の両立
-
-### Production-Ready Features
-- **認証システム**: JWT + bcryptによる堅牢な認証、ユーザー管理スクリプト完備
-- **リアルタイム通信**: SSE + 認証ヘッダーによる安全な双方向通信
-- **ツール統合**: OpenAI Agents SDK活用、RunItemStreamEventによる安定したツール処理
-- **利用可能ツール**: 時刻取得（get_current_time）、計算機（calculate）、Web検索（web_search）
-- **データベース**: PostgreSQL + SQLAlchemy 2.0 + Alembic、UUIDベース設計、適切な外部キー関係
-- **インフラ**: Docker Compose + Nginx、開発/本番環境分離、環境変数による設定管理
-
-### Code Quality & Maintenance (2025年1月更新)
-- **フロントエンドアーキテクチャ**: pages/、auth/、components/による2025年ベストプラクティス準拠の責任分離
-- **ルーティング**: React Router v6 Outletパターン、ネストルート構造、適切な順序管理
-- **バックエンドアーキテクチャ**: core/、schemas/、db/、models/による責任分離、clients.pyでのAPI管理分離
-- **ID生成統一**: generate_unique_id()による6箇所統一、将来の拡張性確保（数字ID等への変更容易）
-- **コード品質**: should_include_message()関数による条件分岐簡素化、テスタビリティ向上
-- **テスト**: pytest + asyncio対応、curlによる動作確認、適切なテストパターン
-- **リント**: Ruff（Python）+ Biome（TypeScript）による統一品質管理
-- **依存関係**: uv（Python）+ npm（Node.js）による効率的パッケージ管理
-- **コンポーネント設計**: Page接尾辞削除による簡潔な命名、認証ロジックの適切な分離
-
-## テスト手順
-
-### 認証トークン取得 
+#### Authentication Token Acquisition
 ```bash
 curl -X POST "http://127.0.0.1:8000/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"email": "test@test.com", "password": "test1234"}'
 ```
-**重要**: Claude Code環境では環境変数設定が困難なため、レスポンスからaccess_tokenを取得し、直接指定してテストを実行すること。
+**Important**: In Claude Code environment, environment variable configuration is difficult, so obtain the access_token from the response and specify it directly for testing.
 
-### 基本テスト例
+#### Basic Test Examples
 ```bash
-# ツールなし会話
+# Test without tools
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
   -H "Authorization: Bearer [TOKEN]" \
   -H "Content-Type: application/json" \
-  -d '{"message": "こんにちは！元気ですか？"}'
+  -d '{"message": "Hello! How are you?"}'
 
-# ツールあり会話
+# Test with tools
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
   -H "Authorization: Bearer [TOKEN]" \
   -H "Content-Type: application/json" \
-  -d '{"message": "現在の時刻をget_current_timeツールで教えてください"}'
+  -d '{"message": "Please tell me the current time using the get_current_time tool"}'
 ```
 
-## Phase1実装テスト手順（2025年8月）
-
-### Phase1実装成果
-- **バックエンド**: openai-agents-python SDK統合、role:toolメッセージ形式、SSE送信完全実装
-- **データ整合性**: フロントエンド送信とDB保存の統一、call_id不一致問題解決
-- **安定性**: ツール使用/非使用の混在セッションでエラーなし動作確認
-
-### テスト手順詳細
-
-#### 1. 基本準備
+#### Mixed Session Testing (Tool and Non-Tool Conversations)
 ```bash
-# 認証トークン取得
-curl -X POST "http://127.0.0.1:8000/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@test.com", "password": "test1234"}'
-```
-
-#### 2. 単体機能テスト
-```bash
-# 注意: Claude Code環境では環境変数設定が困難なため、トークンを直接指定
-# まず認証トークンを取得
-TOKEN=$(curl -X POST "http://127.0.0.1:8000/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@test.com", "password": "test1234"}' \
-  --silent | jq -r '.access_token')
-
-# ツールなし会話
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "こんにちは、元気ですか？"}' 2>/dev/null
-
-# ツールあり会話
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "現在の時刻をget_current_timeツールで教えてください"}' 2>/dev/null
-```
-
-#### 3. 混在セッションテスト
-```bash
-# 同一会話IDで複数パターンテスト
 CONV_ID="mixed-test-$(date +%s)"
 
-# 1. ツールなし
+# 1. Non-tool conversation
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "こんにちは！"}' # 通常会話
+  -d '{"message": "Hello!"}'
 
-# 2. ツールあり
+# 2. Tool execution
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "現在時刻をget_current_timeツールで取得してください"}' # ツール実行
+  -d '{"message": "Please get the current time using the get_current_time tool"}'
 
-# 3. ツールなし
+# 3. Calculate tool
 curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "ありがとうございます！"}' # 通常会話
-
-# 4. 別ツール
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "10 + 15を計算してください"}' # 計算ツール
-
-# 5. ツールなし
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "素晴らしい！"}' # 通常会話
+  -d '{"message": "Please calculate 10 + 15"}'
 ```
 
-#### 4. データ整合性確認
+#### Data Consistency Verification
 ```bash
-# 会話履歴取得
+# Get conversation history
 curl -X GET "http://127.0.0.1:8000/api/conversations/$CONV_ID" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-#### 5. 期待する結果パターン
+#### Expected Results
 
-**SSE送信形式（ツールあり）:**
+**SSE streaming format (with tools):**
 ```json
 data: {"role": "tool", "content": "{\"tool_call_id\": \"call_abc123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-02 02:56:41 UTC\", \"status\": \"success\"}", "id": "call_abc123", "timestamp": "2025-08-02T02:56:41.118683+00:00"}
-data: {"role": "assistant", "content": "現在", "id": "assistant_id"}
-...
-done: {"id": "assistant_id"}
+data: {"role": "assistant", "content": "Current", "id": "assistant_id"}
 ```
 
-**DB保存形式:**
+**Database storage format:**
 ```json
 {
   "role": "tool",
@@ -552,35 +434,52 @@ done: {"id": "assistant_id"}
 }
 ```
 
-#### 6. 検証ポイント
-- ✅ **SSE送信**: `role: "tool"`イベントが正しく送信される
-- ✅ **DB保存**: ツール情報がJSON形式で保存される
-- ✅ **tool_name**: 空文字列でなく正しいツール名が入る
-- ✅ **エラーなし**: 混在セッションでAPIエラーが発生しない
-- ✅ **会話継続**: ツール実行後も正常に会話が継続できる
+#### Verification Points
+- ✅ **SSE transmission**: `role: "tool"` events are correctly sent
+- ✅ **DB storage**: Tool information is stored in JSON format
+- ✅ **tool_name**: Correct tool name (not empty string)
+- ✅ **Error-free**: No API errors in mixed sessions
+- ✅ **Conversation continuity**: Normal conversation continues after tool execution
 
-### バックエンドログでの確認事項
+## Pre-Commit Checklist
+
+Follow these verification steps before committing:
+
+### 1. Code Quality Checks
+
+#### Frontend (`/frontend/`)
+```bash
+npm run lint         # Biome lint with fix and error-on-warnings
+npm run format       # Biome format (if needed)
+npm run check        # Biome check
 ```
-[DEBUG] Tool started: get_current_time with ID [call_id]
-[DEBUG] Tool completed: call_id=[call_id], output=[output]
-[DEBUG] Sending tool_event: {"tool_call_id": "[call_id]", "tool_name": "get_current_time", "output": "[output]", "status": "success"}
-[DB保存] role=tool content={"tool_call_id": "[call_id]", "tool_name": "get_current_time", "output": "[output]", "status": "success"}
-[DB保存] role=assistant content=[assistant_response]
+
+#### Backend (`/backend/`)
+```bash
+uv run ruff check    # Ruff lint check
+uv run ruff format   # Ruff format (if needed)
+uv run pytest       # Run tests (when possible)
 ```
 
-このテスト手順により、Phase1実装の完全性と安定性を確認できる。
+### 2. Staging Content Self-Review
 
-## Phase1実装 + コード品質改善完了（2025年8月3日）
+```bash
+git status           # Check changed files
+git diff --staged    # Review staged content details
+```
 
-**Phase1実装成果**:
-- データベース構造の大幅シンプル化（tool_execution削除、role:tool形式統一）
-- OpenAI Agents SDK完全統合、SSEストリーミング安定化
-- ツール実行と通常会話の混在セッション完全対応
+**Review Points:**
+- No unintended changes included
+- Understand changes to include in commit message
+- No sensitive information (API keys, passwords) included
+- No debug code or comments remaining
 
-**コード品質改善成果**:
-- 技術的負債完全除去（重複ファイル削除、デバッグコメント簡素化）
-- 条件分岐簡素化（should_include_message関数抽出）
-- ID生成統一（generate_unique_id関数による6箇所統一）
-- 将来の拡張性確保（数字ID等への変更容易）
+### 3. Commit Execution
 
-**最終状態**: **本番品質のクリーンなコードベース達成、継続開発準備完了**
+After quality checks and self-review are complete, execute the commit:
+
+```bash
+git commit -m "Appropriate commit message"
+```
+
+**Note**: This process ensures codebase quality maintenance and improves review efficiency.
