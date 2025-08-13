@@ -1,6 +1,8 @@
 # React FastAPI Chat Application
 
-OpenAI GPT-4を使用したチャットアプリケーション。React + Viteフロントエンド、FastAPI + uvバックエンド、PostgreSQLデータベースで構成されています。
+OpenAI GPT-4を使用したチャットアプリケーション。
+
+React + Viteフロントエンド、FastAPI + uvバックエンド、PostgreSQLデータベースで構成されています。
 
 ## 技術スタック
 
@@ -81,6 +83,8 @@ react-fastapi-chat-app/
 - **JWT認証システム**: セキュアなユーザー認証とセッション管理
 - **リアルタイムチャット**: Server-Sent Events (SSE)を使用したストリーミング応答（認証付き）
 - **効率的なツール実行処理**: OpenAI Agents SDKのRunItemStreamEventによる安定したツール処理
+- **高度なストリーミング処理**: ResponseTextDeltaEventとResponseFunctionCallArgumentsDeltaEventの分離によるクリーンな会話体験
+- **リアルタイムツール検出**: ResponseOutputItemAddedEventによる即座のツール決定検出
 - **Claudeライクなデザイン**: モダンでクリーンなUI
 - **会話履歴**: PostgreSQLデータベースでチャット履歴を永続化（ユーザー別）
 - **会話管理**: 複数の会話を作成・切り替え・削除
@@ -299,9 +303,8 @@ docker compose up -d
 ### messages テーブル
 - `id`: メッセージID (UUID)
 - `conversation_id`: 会話ID (外部キー)
-- `role`: ロール (user/assistant/system)
-- `content`: メッセージ内容
-- `tool_metadata`: ツールメタデータ (JSON)
+- `role`: ロール (user/assistant/tool)
+- `content`: メッセージ内容（ツールの場合はJSON形式）
 - `created_at`: 作成日時
 
 
@@ -362,9 +365,124 @@ AVAILABLE_TOOLS = [
 - **calculate**: 数式計算（安全な式のみ）
 - **web_search**: Web検索（Mock版）
 
+#### ツールのストリーミング処理
+
+OpenAI Agents SDKによるツール処理の流れ：
+
+1. **ツール呼び出し検出**: `RunItemStreamEvent`の`tool_called`イベントで即座に検出
+2. **ツール実行**: バックエンドでツールを実行
+3. **結果ストリーミング**: `tool_output`イベントで結果をリアルタイムにSSE送信
+4. **データベース保存**: role:tool形式でメッセージとして保存
+
+```json
+{
+  "role": "tool",
+  "content": "{\"tool_call_id\": \"call_123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-07 07:46:18 UTC\", \"status\": \"success\"}"
+}
+```
+
 ### デザインのカスタマイズ
 
 `frontend/src/App.css`でスタイルを調整できます。
+
+## 主要なアーキテクチャの特徴
+
+### OpenAI Agent SDKストリーミング処理
+
+本プロジェクトは**openai-agents-python SDK**を使用し、以下の高度なストリーミング処理を実装しています：
+
+#### イベント処理システム
+
+**低レベルイベント（RawResponsesStreamEvent）**
+- **ResponseTextDeltaEvent**: AI応答のリアルタイム文字単位ストリーミング
+- **ResponseFunctionCallArgumentsDeltaEvent**: ツール引数の受信（AI応答から完全分離）
+- **ResponseOutputItemAddedEvent**: 新しい応答アイテム追加の瞬間検出
+
+**高レベルイベント（RunItemStreamEvent）**
+- **message_output_created**: 完成したメッセージの作成
+- **tool_called**: ツール呼び出しの即座検出
+- **tool_output**: ツール実行結果の受信
+
+#### 通常メッセージのストリーミングフロー
+
+```python
+# 1. API呼び出し
+result = Runner.run_streamed(chat_agent, api_messages)
+async for event in result.stream_events():
+    
+    # 2. テキストデルタイベント処理
+    if isinstance(event, RawResponsesStreamEvent):
+        if isinstance(event.data, ResponseTextDeltaEvent):
+            content = event.data.delta  # 文字単位でのリアルタイム受信
+            assistant_content += content
+            
+            # 3. SSEでフロントエンドへ送信
+            content_event = {
+                "role": "assistant",
+                "content": content,
+                "id": assistant_id
+            }
+            yield f"data: {json.dumps(content_event)}\n\n"
+```
+
+#### ツール実行ストリーミングフロー
+
+```python
+# 1. ツール呼び出し検出
+if hasattr(event, "item") and event.item.type == "tool_call_item":
+    # ツール情報を即座に抽出・追跡
+    tool_name = getattr(raw_item, "name", "unknown")
+    call_id = getattr(event.item, "id", generate_unique_id())
+
+# 2. ツール実行完了
+elif event.item.type == "tool_call_output_item":
+    # 結果を即座にSSE送信
+    tool_event = {
+        "role": "tool",
+        "content": json.dumps({
+            "tool_call_id": call_id,
+            "tool_name": tool_name,
+            "output": output,
+            "status": "success"
+        }),
+        "id": call_id,
+        "timestamp": datetime.now(UTC).isoformat()
+    }
+    yield f"data: {json.dumps(tool_event)}\n\n"
+```
+
+#### フロントエンドでのSSE受信処理
+
+```javascript
+// EventSource接続
+const eventSource = new EventSource(url, { headers: { Authorization: `Bearer ${token}` }});
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  
+  if (data.role === 'assistant') {
+    // リアルタイム文字追加
+    setMessages(prev => updateLastMessage(prev, data.content));
+  } else if (data.role === 'tool') {
+    // ツール結果の表示
+    const toolData = JSON.parse(data.content);
+    displayToolExecution(toolData);
+  }
+};
+```
+
+#### レスポンス変形処理の特徴
+
+**AI応答とツール引数の完全分離**
+- `ResponseFunctionCallArgumentsDeltaEvent`を意図的に無視
+- AI応答のストリーミングをクリーンに保持
+- ツール引数はバックグラウンドで処理
+
+**コード構造最適化**
+- **active_tools最小限マッピング**: 複雑な`tool_tracking`辞書を大幅簡素化（70行→30行）
+- **高レベルイベント活用**: RunItemStreamEventによるコード品質向上（57%改善）
+- **技術的負債完全解消**: 不要コメント削除、統一リファクタリング
+- **SDK公式イベントモデル準拠**: 堅牢で安定した処理を実現
 
 ## ユーザー管理
 
@@ -450,67 +568,13 @@ uv cache clean
 uv sync --no-cache
 ```
 
-## ライセンス
-
-MIT License
-
 ## 更新履歴
 
-- 2025年8月12日: SDKイベント処理の根本的リファクタリング（Phase 3完了）
-  - **RunItemStreamEvent活用**: 高レベルイベント処理への移行でコード品質57%改善
-  - **active_tools最小限マッピング**: 複雑な`tool_tracking`辞書を大幅簡素化（70行→30行）
-  - **AI応答とツール引数完全分離**: ResponseFunctionCallArgumentsDeltaEvent無視によるクリーンな会話体験
-  - **コード構造最適化**: 不要コメント削除、技術的負債完全解消
-  - **安定性向上**: SDKの公式イベントモデル準拠による堅牢なツール処理実現
-  - **Web検索機能実装**: Mock版web_searchツールによる検索機能基盤構築
+**最新バージョン** (2025年8月)
+- **Phase 3完了**: SDK イベント処理の根本的リファクタリング、RunItemStreamEvent活用による安定性向上
+- **フロントエンドアーキテクチャ現代化**: React Router v6 Outlet パターン、pages/構造、BrowserRouter最適配置
+- **データ構造シンプル化**: role:toolメッセージ形式採用、tool_execution削除、SSEストリーミング安定化
+- **レイヤー型アーキテクチャ**: core/, db/, schemas/, models/分離、外部APIクライアント管理
+- **開発環境最新化**: openai-agents-python SDK導入、Vite v7.0.5対応、uv移行完了
 
-- 2025年8月8日: フロントエンドアーキテクチャ現代化（Phase 12-14）
-  - **React Router v6 Outletパターン導入**: ProtectedRouteの現代化、ネストルート最適化
-  - **pages/フォルダ構造実装**: Chat/Login/NotFound.tsx、LoginRoute.tsx分離による責任明確化
-  - **BrowserRouter最適配置**: main.tsx移動による2025年ベストプラクティス準拠
-  - **画面更新時履歴消失問題の根本解決**: useEffect最適化による認証完了後の確実な会話復元実装
-  - **404エラーハンドリング大幅改善**: 専用NotFoundページ（`/not-found-error`）でユーザーフレンドリーなエラー表示
-  - **状態管理最適化**: conversationId初期値修正、無限ループ防止、useEffect責任分離実現
-  - **UX向上**: 存在しない会話URLアクセス時の明確なフィードバックとホームリンクでの復帰経路提供
-  - **セキュリティ改善**: 他人の会話URLアクセス時の適切なエラー処理で情報漏洩防止
-  - **App.tsx大幅簡素化**: 878行→27行（92%削減）でルーティング定義に集中
-
-- 2025年8月6日: 緊急バグ修正と新仕様実装
-  - **Critical Bug Fix**: null安全性確保とErrorHandling強化により最後の会話削除時のTypeError/404エラー完全解決
-  - **新仕様実装**: 90%バグ削減を実現する会話削除動作（現在開いていない履歴削除時は状態変更なし）
-  - **UX大幅改善**: 作業中断なしでの履歴整理、次会話自動移動による操作効率67%向上
-  - **技術改善**: 非同期処理順序保証、削除前会話決定ロジック、適切な関数分離による保守性向上
-  - **包括ドキュメント**: phase1.mdで詳細分析・実装計画・テスト手順を完全記録
-
-- 2025年8月: Phase1実装完了・コード品質改善
-  - **Phase1データ構造シンプル化**: role:toolメッセージ形式採用、tool_execution削除
-  - **SSEストリーミング安定化**: ツール実行の即座検出・送信実装
-  - **品質改善**: デバッグコメント除去、複雑条件分岐簡素化、ID生成統一
-  - **技術的負債解消**: 重複ファイル削除、未使用コード除去、統一リファクタリング
-  - **本番品質達成**: 1時間で6項目完了、機能100%保持でクリーンコードベース実現
-
-- 2025年7月: Phase 1・4完了・レイヤー型アーキテクチャ採用
-  - **Phase 1**: 簡素化されたrole:toolメッセージ形式でツール実行処理実装
-  - **Phase 4**: 真のリアルタイムツール検出（ResponseOutputItemAddedEvent）
-  - **レイヤー型アーキテクチャ**: core/, db/, schemas/, models/分離
-  - **外部APIクライアント管理**: clients.pyでDependency Injection実装
-  - **コード品質向上**: Biome/Ruff統一、TypeScript安全性向上
-
-- 2025年7月: openai-agents-python SDK導入
-  - 直接のOpenAI API呼び出しからopenai-agents-python SDKに移行
-  - モデル: GPT-4o-mini採用（高速・低コスト）
-  - システムプロンプトをAgent.instructionsで管理
-  - エージェント機能拡張の基盤構築
-  - 既存のSSEストリーミング機能完全維持
-
-- 2025年7月: SSE版リリース
-  - WebSocketからServer-Sent Events (SSE)への移行完了
-  - HTTPベースの認証（Authorizationヘッダー）
-  - Function Calling/MCP対応の基盤実装
-  - UIアニメーション最適化
-
-- 2025年7月: 開発環境最新化
-  - Vite v7.0.5対応・Node.js 22+要件対応
-  - Poetry → uv移行完了
-  - PostgreSQL 16 + SQLAlchemy 2.0
-  - FastAPI 0.116+対応
+詳細な変更履歴は各Phaseドキュメント（phase1.md, phase3.md等）を参照してください。
