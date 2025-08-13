@@ -86,24 +86,23 @@ docker-compose ps       # Check service status
   /app/                 # Application code
     /core/              # Core infrastructure layer
       config.py         # Application settings and configuration
+      constants.py      # Default values and constants
       deps.py           # Dependency injection utilities
       security.py       # JWT authentication and password handling
+      utils.py          # Utility functions
     /db/                # Database layer
       session.py        # Database connection and session management
     /models/            # SQLAlchemy database models
       __init__.py       # Model imports for app-wide access
       base.py           # SQLAlchemy Base declaration
-      user.py           # User model
       conversation.py   # Conversation and Message models
-      tool_execution.py # Tool execution tracking model
+      user.py           # User model
     /schemas/           # Pydantic data validation schemas
       auth.py           # Authentication request/response schemas
-      common.py         # Common shared schemas
-      conversation.py   # Conversation-related schemas
+      common.py         # Common shared schemas (ChatRequest, SSEEvent)
     clients.py          # External API client management (OpenAI, Agents)
     main.py             # FastAPI app with routes and business logic
     tools.py            # Tool definitions for agent interactions
-    tool_execution_manager.py # Tool execution lifecycle management
   /alembic/             # Database migrations
   /scripts/             # Management scripts (user management, etc.)
   pyproject.toml        # uv dependencies and ruff configuration
@@ -121,17 +120,19 @@ compose.yaml            # Docker Compose orchestration
 - **REST API**: CRUD operations for conversations and messages
 - **Authentication**: JWT tokens via Authorization header for secure SSE connections
 
+**Note**: Legacy WebSocket configurations (`/ws/`) remain in nginx.conf and vite.config.ts but are not actively used since migration to SSE.
+
 ### Database Schema
-- `conversations`: id (UUID), title, created_at, updated_at
-- `messages`: id (UUID), conversation_id (FK), role, content, created_at, tool_metadata (JSON)
-- `users`: id (UUID), email, hashed_password, is_active, created_at
-- Uses UUID primary keys and proper foreign key relationships
-- Simplified schema with tool information stored as JSON in messages.tool_metadata
+- `conversations`: id (String), title, user_id (FK), created_at, updated_at
+- `messages`: id (String), conversation_id (FK), role, content, created_at
+- `users`: id (String), email, hashed_password, is_active, created_at
+- Uses String primary keys with UUID-like values and proper foreign key relationships
+- Simplified schema with tool information stored directly as role:tool messages
 
 ### Architecture & Database Design Best Practices
 - **Model Separation**: SQLAlchemy model separation with models/ directory structure
 - **Migration Management**: Alembic dependency management and version control
-- **Progressive Tool Integration**: @function_tool decorator for extensible design with lightweight tool_metadata storage
+- **Progressive Tool Integration**: @function_tool decorator for extensible design with role:tool message format
 - **Two-stage Status Management**: Comprehensive status tracking with migration and database design best practices
 - **Layered Architecture**: Zero-downtime introduction of core/ (config, auth, dependencies), schemas/ (type definitions), db/ (data layer) separation
 
@@ -172,7 +173,8 @@ compose.yaml            # Docker Compose orchestration
 - **Architecture**: Implemented layered architecture with core/, db/, schemas/ separation
 - **External API Management**: Implemented clients.py with Dependency Injection + Lifespan Events
 - **Tool Execution**: Simplified role:tool message format with database persistence
-  - Database structure simplification: removed tool_execution table, unified role:tool format
+  - Database structure simplification: removed tool_execution table and tool_metadata column
+  - Unified role:tool format stored directly as messages with role='tool'
   - OpenAI Agents SDK complete integration with SSE streaming stabilization
   - Mixed sessions support: seamless tool and non-tool conversations
 - **Real-time Tool Detection**: Instant tool decision detection via ResponseOutputItemAddedEvent
@@ -188,12 +190,12 @@ compose.yaml            # Docker Compose orchestration
   - **Tool Definitions**: Tools defined in `app/tools.py` with `@function_tool` decorator
   - **Available Tools**: 
     - `get_current_time`: Current timestamp retrieval
-    - `calculate`: Safe mathematical calculations via ast.literal_eval
+    - `calculate`: Mathematical calculations with safe character validation
     - `web_search`: Mock web search functionality (foundational implementation)
   - **Architecture**: 
     - `AVAILABLE_TOOLS` list for easy extension
     - Direct role:tool SSE streaming with real-time transmission
-    - Simplified JSON-based database storage in messages.tool_metadata
+    - Simplified database storage as role:tool messages in messages table
     - Replaced complex tool_execution table with unified role:tool format
 
 - **Advanced Features**: 
@@ -346,7 +348,7 @@ def DATABASE_URL(self) -> str:
   - TypeScript safety improvements (removed non-null assertions)
 - **Backend Standards**:
   - Modern type annotations (Dict→dict, List→list, Optional→T|None)
-  - Security improvements (eval→ast.literal_eval)
+  - Safe expression evaluation with character validation before eval()
   - Unused import removal
 - **Automation & Tooling**:
   - Unified code formatting with Biome/Ruff
