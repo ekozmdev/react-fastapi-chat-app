@@ -69,7 +69,6 @@ const Chat: React.FC = () => {
           },
         });
 
-
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
@@ -237,7 +236,6 @@ const Chat: React.FC = () => {
 
   // 認証完了後の会話復元専用（画面更新対応）
   useEffect(() => {
-
     if (!isAuthLoading && token && urlConversationId) {
       // 新規チャット作成中は無視
       if (isCreatingNewChat) {
@@ -246,7 +244,7 @@ const Chat: React.FC = () => {
       }
 
       // 削除済み会話IDの場合は無視（conversations配列に存在しない）
-      const conversationExists = conversations.some(conv => conv.id === urlConversationId);
+      const conversationExists = conversations.some((conv) => conv.id === urlConversationId);
       if (!conversationExists) {
         return;
       }
@@ -323,7 +321,6 @@ const Chat: React.FC = () => {
    * @param nextConversation 事前に決定された次の会話（なければnull）
    */
   const handleCurrentConversationDeletion = async (nextConversation: Conversation | null) => {
-
     if (nextConversation) {
       // 次の会話に移動
       navigate(`/chat/${nextConversation.id}`);
