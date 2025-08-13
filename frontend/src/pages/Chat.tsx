@@ -69,18 +69,17 @@ const Chat: React.FC = () => {
           },
         });
 
+
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
 
         const data = await res.json();
 
-        // メッセージを段階的に表示（非同期）
-        setTimeout(() => {
-          setMessages(data.messages);
-          setConversationId(convId);
-          setIsLoadingConversation(false);
-        }, 50); // 少し遅延させてスムーズに表示
+        // メッセージと状態を即座に設定
+        setMessages(data.messages);
+        setConversationId(convId);
+        setIsLoadingConversation(false);
       } catch (err) {
         console.error('Failed to fetch conversation:', err);
         setIsLoadingConversation(false);
@@ -238,10 +237,17 @@ const Chat: React.FC = () => {
 
   // 認証完了後の会話復元専用（画面更新対応）
   useEffect(() => {
+
     if (!isAuthLoading && token && urlConversationId) {
       // 新規チャット作成中は無視
       if (isCreatingNewChat) {
         setIsCreatingNewChat(false);
+        return;
+      }
+
+      // 削除済み会話IDの場合は無視（conversations配列に存在しない）
+      const conversationExists = conversations.some(conv => conv.id === urlConversationId);
+      if (!conversationExists) {
         return;
       }
 
@@ -258,6 +264,7 @@ const Chat: React.FC = () => {
     conversationId,
     fetchConversation,
     isCreatingNewChat,
+    conversations, // conversations配列も依存に追加
   ]);
 
   // URLクリア処理専用
@@ -316,6 +323,7 @@ const Chat: React.FC = () => {
    * @param nextConversation 事前に決定された次の会話（なければnull）
    */
   const handleCurrentConversationDeletion = async (nextConversation: Conversation | null) => {
+
     if (nextConversation) {
       // 次の会話に移動
       navigate(`/chat/${nextConversation.id}`);
