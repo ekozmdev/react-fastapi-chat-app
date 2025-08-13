@@ -1,9 +1,10 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useNavigate, useParams } from 'react-router-dom';
+import remarkGfm from 'remark-gfm';
 import '../styles/App.css';
 import { useAuth } from '../auth/AuthContext';
-import MarkdownRenderer from '../components/MarkdownRenderer';
 import type { Conversation, Message, StreamingMessage } from '../types';
 import {
   findNextConversation,
@@ -498,7 +499,11 @@ const Chat: React.FC = () => {
 
         return (
           <div className="message-text">
-            <MarkdownRenderer content={content.text || message.content} />
+            <div className="markdown-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {content.text || message.content}
+              </ReactMarkdown>
+            </div>
             {relatedTools.length > 0 && (
               <button
                 type="button"
@@ -601,7 +606,7 @@ const Chat: React.FC = () => {
           </button>
         </div>
 
-        {/* Phase 8: サイドバー展開時・閉じた時両方で新しいチャットボタン表示 */}
+        {/* サイドバー展開時・閉じた時両方で新しいチャットボタン表示 */}
         <button
           type="button"
           className={`new-chat-btn ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}
@@ -767,7 +772,11 @@ const Chat: React.FC = () => {
                 <div className="message-avatar">AI</div>
                 <div className="message-content">
                   <div className="message-text">
-                    <MarkdownRenderer content={streamingMessage.content} />
+                    <div className="markdown-content">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {streamingMessage.content}
+                      </ReactMarkdown>
+                    </div>
                     {streamingMessage.isStreaming && <span className="typing-indicator">▊</span>}
                   </div>
                 </div>
