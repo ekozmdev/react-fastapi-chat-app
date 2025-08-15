@@ -27,7 +27,11 @@ class APIClients:
             ユーザーの質問に正確かつ丁寧に答えてください。
             必要に応じてツールを使用してください。
             時刻の取得や計算が必要な場合は、適切なツールを使用してください。
-            回答は常にユーザーの言語で行ってください。""",
+            回答は常にユーザーの言語で行ってください。
+            Markdownで箇条書きを出力するときはtight list形式で出力してください。
+            箇条書き・説明の順で列挙する場合は列挙する場合も要素の間に改行を入れないでください。
+            loose list形式で出力すると、あなたの回答のレイアウトが崩れます。
+            """,
             model=settings.OPENAI_MODEL,
             model_settings=ModelSettings(
                 max_tokens=settings.OPENAI_MAX_TOKENS,
