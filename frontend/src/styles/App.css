@@ -687,6 +687,29 @@ body {
   font-style: italic;
 }
 
+/* Markdown 内では改行の可視化を止める＝pre-wrap を打ち消す */
+.message-text .markdown-content {
+  white-space: normal;
+}
+
+/* マーカー位置とインデントを安定化 */
+.message-text .markdown-content ul,
+.message-text .markdown-content ol {
+  list-style-position: outside;
+  padding-left: 1.4rem; /* 既存の1.2emより少し広めでもOK */
+}
+
+/* ルーズリストで生成される <li><p>…</p></li> の段落余白を明示ゼロ */
+.message-text .markdown-content li > p {
+  margin: 0;
+}
+
+/* リスト項目間の行間を調整 */
+.message-text .markdown-content li {
+  margin-bottom: 0.3em;
+  line-height: 1.6;
+}
+
 /* インラインコード */
 .markdown-content code {
   background-color: #f5f5f5;
