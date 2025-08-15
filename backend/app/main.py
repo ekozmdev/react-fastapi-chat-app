@@ -605,7 +605,7 @@ async def stream_chat(
 
     return StreamingResponse(
         generate_sse_stream(),
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
