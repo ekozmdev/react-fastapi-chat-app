@@ -10,23 +10,11 @@ export interface MessageContent {
   // user メッセージ
   text?: string;
 
-  // assistant メッセージ
-  tool_calls?: ToolCall[];
-
   // tool メッセージ
   tool_call_id?: string;
   tool_name?: string;
   output?: string;
   status?: 'success' | 'error';
-}
-
-export interface ToolCall {
-  id: string;
-  type: string;
-  function: {
-    name: string;
-    arguments: string;
-  };
 }
 
 export interface StreamingMessage {

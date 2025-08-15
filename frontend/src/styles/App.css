@@ -922,19 +922,6 @@ body {
   word-break: break-word;
 }
 
-.tool-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
-
-.tool-name {
-  font-weight: 500;
-  color: var(--text-dark);
-  flex: 1;
-}
 
 /* 右サイドバー */
 .right-sidebar {
@@ -1071,9 +1058,6 @@ body {
     padding: 12px 16px;
   }
   
-  .tool-header {
-    font-size: 12px;
-  }
 
   /* 小さい画面では右サイドバーを狭くする */
   .right-sidebar.open {
