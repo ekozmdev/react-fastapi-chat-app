@@ -11,16 +11,17 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <Routes>
-        {/* 認証なしでアクセス可能なルート */}
-        <Route path="/login" element={<LoginRoute />} />
         {/* ログインページ（認証済みの場合は自動リダイレクト） */}
-        <Route path="/not-found-error" element={<NotFound />} /> {/* 404エラーページ */}
-        {/* 認証が必要な保護されたルート群 */}
+        <Route path="/login" element={<LoginRoute />} />
+        {/* 404エラーページ */}
+        <Route path="/not-found-error" element={<NotFound />} />
         <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<Chat />} /> {/* ホーム - チャットページ */}
-          <Route path="/chat/:conversationId?" element={<Chat />} /> {/* 特定の会話ページ */}
+          {/* ホーム - チャットページ */}
+          <Route path="/" element={<Chat />} />
+          {/* 特定の会話ページ */}
+          <Route path="/chat/:conversationId?" element={<Chat />} />
         </Route>
-        {/* 未定義パスのフォールバック - ルートにリダイレクト */}
+        {/* 未定義パスの場合はルートにリダイレクト */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
