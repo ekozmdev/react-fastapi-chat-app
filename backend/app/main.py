@@ -594,7 +594,7 @@ async def stream_chat(
 
             # ストリーミング完了
             done_event = {"id": assistant_id}
-            yield f"done: {json.dumps(done_event, ensure_ascii=False)}\n"
+            yield f"event: done\ndata: {json.dumps(done_event, ensure_ascii=False)}\n\n"
 
         except Exception as e:
             # エラー送信

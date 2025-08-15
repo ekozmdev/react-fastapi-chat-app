@@ -134,81 +134,134 @@ const Chat: React.FC = () => {
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
 
+            let currentEvent = null;
+            let currentData = '';
+            
             for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-
-                  switch (data.role) {
-                    case 'tool':
-                      // ツールメッセージを直接メッセージ履歴に追加
-                      setMessages((prev) => [
-                        ...prev,
-                        {
-                          id: data.id,
-                          role: 'tool',
-                          content: data.content, // JSON文字列
-                          timestamp: data.timestamp || new Date().toISOString(),
-                        },
-                      ]);
-                      break;
-                    case 'assistant':
-                      // assistantメッセージのストリーミング処理
+              if (line.startsWith('event: ')) {
+                // 前のイベントを処理
+                if (currentEvent && currentData) {
+                  try {
+                    const data = JSON.parse(currentData);
+                    if (currentEvent === 'done') {
+                      // ストリーミング完了処理
                       setStreamingMessage((prev) => {
-                        if (!prev) {
-                          // 初回コンテンツの場合、新しいストリーミングメッセージを作成
-                          return {
-                            id: data.id,
-                            content: data.content,
-                            isStreaming: true,
-                          };
+                        if (prev) {
+                          setMessages((m) => [
+                            ...m,
+                            {
+                              id: data.id,
+                              role: 'assistant',
+                              content: prev.content,
+                              timestamp: new Date().toISOString(),
+                            },
+                          ]);
                         }
-                        return {
-                          ...prev,
-                          content: prev.content + data.content,
-                        };
+                        return null;
                       });
-                      break;
-                    default:
-                      // エラー処理（従来形式）
-                      if (data.error) {
-                        console.error('SSE error:', data.error);
-                        setIsLoading(false);
-                        alert(`エラー: ${data.error}`);
+                      setIsLoading(false);
+                      fetchConversations();
+                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
+                      if (newChatIdRef.current) {
+                        navigate(`/chat/${newChatIdRef.current}`);
+                        newChatIdRef.current = null; // クリア
                       }
-                      break;
-                  }
-                } catch (e) {
-                  console.error('Failed to parse SSE data:', e);
-                }
-              } else if (line.startsWith('done: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  // ストリーミング完了処理
-                  setStreamingMessage((prev) => {
-                    if (prev) {
-                      setMessages((m) => [
-                        ...m,
-                        {
-                          id: data.id,
-                          role: 'assistant',
-                          content: prev.content,
-                          timestamp: new Date().toISOString(),
-                        },
-                      ]);
                     }
-                    return null;
-                  });
-                  setIsLoading(false);
-                  fetchConversations();
-                  // 新規チャットの場合、ストリーミング完了後にナビゲーション
-                  if (newChatIdRef.current) {
-                    navigate(`/chat/${newChatIdRef.current}`);
-                    newChatIdRef.current = null; // クリア
+                  } catch (e) {
+                    console.error('Failed to parse event data:', e);
                   }
-                } catch (e) {
-                  console.error('Failed to parse done event:', e);
                 }
+                
+                // 新しいイベントを開始
+                currentEvent = line.slice(7);
+                currentData = '';
+              } else if (line.startsWith('data: ')) {
+                if (currentEvent) {
+                  // イベント内のdata行
+                  currentData = line.slice(6);
+                } else {
+                  // 通常のdataメッセージ（既存のSSE形式）
+                  try {
+                    const data = JSON.parse(line.slice(6));
+
+                    switch (data.role) {
+                      case 'tool':
+                        // ツールメッセージを直接メッセージ履歴に追加
+                        setMessages((prev) => [
+                          ...prev,
+                          {
+                            id: data.id,
+                            role: 'tool',
+                            content: data.content, // JSON文字列
+                            timestamp: data.timestamp || new Date().toISOString(),
+                          },
+                        ]);
+                        break;
+                      case 'assistant':
+                        // assistantメッセージのストリーミング処理
+                        setStreamingMessage((prev) => {
+                          if (!prev) {
+                            // 初回コンテンツの場合、新しいストリーミングメッセージを作成
+                            return {
+                              id: data.id,
+                              content: data.content,
+                              isStreaming: true,
+                            };
+                          }
+                          return {
+                            ...prev,
+                            content: prev.content + data.content,
+                          };
+                        });
+                        break;
+                      default:
+                        // エラー処理（従来形式）
+                        if (data.error) {
+                          console.error('SSE error:', data.error);
+                          setIsLoading(false);
+                          alert(`エラー: ${data.error}`);
+                        }
+                        break;
+                    }
+                  } catch (e) {
+                    console.error('Failed to parse SSE data:', e);
+                  }
+                }
+              } else if (line === '') {
+                // 空行でイベント終了
+                if (currentEvent && currentData) {
+                  try {
+                    const data = JSON.parse(currentData);
+                    if (currentEvent === 'done') {
+                      // ストリーミング完了処理
+                      setStreamingMessage((prev) => {
+                        if (prev) {
+                          setMessages((m) => [
+                            ...m,
+                            {
+                              id: data.id,
+                              role: 'assistant',
+                              content: prev.content,
+                              timestamp: new Date().toISOString(),
+                            },
+                          ]);
+                        }
+                        return null;
+                      });
+                      setIsLoading(false);
+                      fetchConversations();
+                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
+                      if (newChatIdRef.current) {
+                        navigate(`/chat/${newChatIdRef.current}`);
+                        newChatIdRef.current = null; // クリア
+                      }
+                    }
+                  } catch (e) {
+                    console.error('Failed to parse event data:', e);
+                  }
+                }
+                currentEvent = null;
+                currentData = '';
               }
             }
           }
