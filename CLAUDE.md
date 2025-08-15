@@ -8,7 +8,7 @@ This is a React + FastAPI chat application with real-time Server-Sent Events (SS
 
 - **Frontend**: React + TypeScript (Node.js 22+, Vite 7+)
   - React Router v6 with Outlet pattern for protected routes
-  - Modern folder structure: pages/, auth/, components/ (2025 best practices)
+  - Modern folder structure: pages/, auth/ (2025 best practices)
   - Biome for linting and formatting
 - **Backend**: FastAPI (Python 3.13+) with layered architecture
   - Core layer: config.py, deps.py, security.py
@@ -71,8 +71,6 @@ docker-compose ps       # Check service status
       Chat.tsx          # Main chat page
       Login.tsx         # Login page
       NotFound.tsx      # 404 error page
-    /components/        # Reusable UI components
-      MarkdownRenderer.tsx # Markdown rendering
     /styles/            # Stylesheets
       App.css           # Application-wide styles
       index.css         # Global styles
@@ -336,6 +334,9 @@ def DATABASE_URL(self) -> str:
 
 ### Code Quality Standards
 - **Technical Debt Elimination**: Complete removal of redundant files, debug comment simplification
+- **Dead Code Removal**: Systematic elimination of unreachable code (case 'tool' statements, unused state variables, duplicate CSS definitions)
+- **Type Definition Cleanup**: Removal of unused TypeScript interfaces (ToolCall interface, obsolete tool_calls properties)
+- **CSS Architecture**: Unified color system with CSS variables replacing hardcoded values, elimination of duplicate spinner definitions
 - **Conditional Logic Simplification**: Extracted should_include_message() function for improved testability
 - **ID Generation Unification**: Unified generate_unique_id() function across 6 locations for consistency
 - **Future Extensibility**: Easy migration to numeric IDs or other formats when needed
@@ -343,6 +344,8 @@ def DATABASE_URL(self) -> str:
 
 ### Advanced Code Quality Practices
 - **Frontend Standards**: 
+  - CSS Variables (Custom Properties) for unified color management (30+ variables replacing hardcoded colors)
+  - Dead code elimination (unreachable case statements, unused type definitions)
   - SVG accessibility compliance (WCAG 2.1 AA)
   - Keyboard navigation implementation
   - TypeScript safety improvements (removed non-null assertions)
