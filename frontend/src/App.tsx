@@ -12,7 +12,7 @@ const App: React.FC = () => {
     <AuthProvider>
       <Routes>
         {/* 認証なしでアクセス可能なルート */}
-        <Route path="/login" element={<LoginRoute />} />{' '}
+        <Route path="/login" element={<LoginRoute />} />
         {/* ログインページ（認証済みの場合は自動リダイレクト） */}
         <Route path="/not-found-error" element={<NotFound />} /> {/* 404エラーページ */}
         {/* 認証が必要な保護されたルート群 */}
