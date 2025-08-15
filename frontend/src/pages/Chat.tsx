@@ -30,8 +30,6 @@ const Chat: React.FC = () => {
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // アコーディオン式ツール結果表示の展開状態管理
-  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   // 右サイドバー関連の状態管理
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [selectedToolMessages, setSelectedToolMessages] = useState<Message[]>([]);
@@ -473,19 +471,6 @@ const Chat: React.FC = () => {
     return toolMessages;
   };
 
-  // アコーディオン式ツール展開/折りたたみ
-  const toggleToolExpansion = (toolId: string) => {
-    setExpandedTools((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(toolId)) {
-        newSet.delete(toolId);
-      } else {
-        newSet.add(toolId);
-      }
-      return newSet;
-    });
-  };
-
   const renderMessage = (message: Message) => {
     const content = parseMessageContent(message);
 
@@ -513,42 +498,6 @@ const Chat: React.FC = () => {
                 🔧 ツール実行結果
               </button>
             )}
-          </div>
-        );
-      }
-      case 'tool': {
-        const isExpanded = expandedTools.has(message.id);
-        return (
-          <div className="tool-message">
-            <button
-              className="tool-header clickable"
-              onClick={() => toggleToolExpansion(message.id)}
-              type="button"
-              aria-expanded={isExpanded}
-              aria-label={`${content.tool_name}の実行結果を${isExpanded ? '折りたたむ' : '展開する'}`}
-            >
-              <div className="tool-icon">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  aria-label="完了"
-                  role="img"
-                >
-                  <path
-                    d="M3 7L6 10L11 4"
-                    stroke="#10b981"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <span className="tool-name">{content.tool_name}</span>
-              <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-            </button>
-            {isExpanded && content.output && <div className="tool-output">{content.output}</div>}
           </div>
         );
       }
