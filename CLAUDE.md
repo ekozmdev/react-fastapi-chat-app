@@ -115,6 +115,9 @@ compose.yaml            # Docker Compose orchestration
 - **Development**: Vite dev server proxies `/api/*` to FastAPI backend
 - **Production**: Nginx serves React app and proxies API to FastAPI
 - **Real-time**: Server-Sent Events (SSE) streaming for chat responses at `/api/chat/stream/{conversation_id}`
+  - **Standard Compliance**: HTML5 SSE specification compliant (`text/event-stream`, `event:`/`data:` format)
+  - **Event Types**: Standard `event: done` completion events with backward compatibility
+  - **Encoding**: UTF-8 with proper Japanese character support (`ensure_ascii=False`)
 - **REST API**: CRUD operations for conversations and messages
 - **Authentication**: JWT tokens via Authorization header for secure SSE connections
 
@@ -167,6 +170,9 @@ compose.yaml            # Docker Compose orchestration
 - **Dependency Management**: Migrated from Poetry to uv
 - **Development Environment**: Vite v7.0.5, Node.js 22+ requirements
 - **Real-time Communication**: Migrated from WebSocket to Server-Sent Events (SSE)
+  - **Standards Compliance**: Full HTML5 SSE specification compliance (2025 update)
+  - **Event Format**: Standardized `event: name\ndata: content\n\n` format
+  - **Content-Type**: Proper `text/event-stream` MIME type for optimal browser compatibility
 - **LLM Integration**: Migrated from direct OpenAI API calls to openai-agents-python SDK
 - **Architecture**: Implemented layered architecture with core/, db/, schemas/ separation
 - **External API Management**: Implemented clients.py with Dependency Injection + Lifespan Events
@@ -425,10 +431,17 @@ curl -X GET "http://127.0.0.1:8000/api/conversations/$CONV_ID" \
 
 #### Expected Results
 
-**SSE streaming format (with tools):**
-```json
+**SSE streaming format (HTML5 standard compliant):**
+```
+Content-Type: text/event-stream
+
 data: {"role": "tool", "content": "{\"tool_call_id\": \"call_abc123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-02 02:56:41 UTC\", \"status\": \"success\"}", "id": "call_abc123", "timestamp": "2025-08-02T02:56:41.118683+00:00"}
+
 data: {"role": "assistant", "content": "Current", "id": "assistant_id"}
+
+event: done
+data: {"id": "assistant_id"}
+
 ```
 
 **Database storage format:**
@@ -445,6 +458,8 @@ data: {"role": "assistant", "content": "Current", "id": "assistant_id"}
 - ✅ **tool_name**: Correct tool name (not empty string)
 - ✅ **Error-free**: No API errors in mixed sessions
 - ✅ **Conversation continuity**: Normal conversation continues after tool execution
+- ✅ **Standards compliance**: HTML5 SSE format with proper `Content-Type: text/event-stream`
+- ✅ **Event format**: Standard `event: done` completion events properly parsed
 
 ## Pre-Commit Checklist
 
