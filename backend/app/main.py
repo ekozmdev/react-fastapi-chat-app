@@ -473,7 +473,7 @@ async def stream_chat(
             # OpenAI Agents SDK用メッセージ履歴生成（role: tool → role: assistant変換）
             # 本来はrole: toolで送信したいが、
             # tool call用のメッセージ形式に対応すると特殊なassistantメッセージが必要になるため、
-            # ここではrole: assistantに変換して送信する
+            # ここではrole: toolを一時的にrole: assistantに変換して送信する
             api_messages = []
             for m in conv.messages:
                 if m.role == "tool":
