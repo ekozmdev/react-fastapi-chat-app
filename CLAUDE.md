@@ -46,6 +46,17 @@ uv run ruff format                                 # Format Python code
 uv run pytest                                      # Run tests
 ```
 
+### Dependency Management with uv
+
+#### Requirements Export Commands
+```bash
+# Export production requirements
+uv export --format requirements-txt --output-file requirements.txt
+
+# Export development requirements (includes dev dependencies)
+uv export --format requirements-txt --dev --output-file requirements_dev.txt
+```
+
 **Note**: When testing or debugging changes, the user should start servers manually using the commands above. Claude should not attempt to start development servers (frontend/backend) or view server logs during development/testing sessions. 
 
 **User responsibilities**: Development server startup, server log monitoring, browser-based testing

@@ -556,6 +556,10 @@ uv run ruff check app/
 
 # テスト実行
 uv run pytest
+
+# Requirements ファイルエクスポート
+uv export --format requirements-txt --output-file requirements.txt          # 本番用
+uv export --format requirements-txt --dev --output-file requirements_dev.txt  # 開発用
 ```
 
 ## トラブルシューティング
