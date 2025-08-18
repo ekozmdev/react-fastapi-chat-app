@@ -25,7 +25,7 @@ export const parseMessageContent = (message: Message): MessageContent => {
 
   if (message.role === 'assistant') {
     try {
-      // JSON形式の場合（tool_callsあり）
+      // JSON形式の場合
       return JSON.parse(message.content);
     } catch {
       // プレーンテキストの場合

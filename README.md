@@ -26,8 +26,6 @@ react-fastapi-chat-app/
 │   │   │   ├── AuthContext.tsx
 │   │   │   ├── LoginRoute.tsx
 │   │   │   └── ProtectedRoute.tsx
-│   │   ├── components/
-│   │   │   └── MarkdownRenderer.tsx
 │   │   ├── pages/
 │   │   │   ├── Chat.tsx
 │   │   │   ├── Login.tsx
@@ -383,7 +381,35 @@ OpenAI Agents SDKによるツール処理の流れ：
 
 ### デザインのカスタマイズ
 
-`frontend/src/App.css`でスタイルを調整できます。
+`frontend/src/styles/App.css`でスタイルを調整できます。
+
+#### CSS変数によるテーマカスタマイズ
+
+本プロジェクトでは**CSS変数**を使用した統一されたカラーシステムを採用しており、簡単にテーマをカスタマイズできます：
+
+```css
+:root {
+  /* 背景色 */
+  --background-primary: #ffffff;
+  --background-secondary: #f7f7f8;
+  --background-tertiary: #f3f3f3;
+  
+  /* テキスト色 */
+  --text-primary: #333;
+  --text-secondary: #666;
+  --text-muted: #999;
+  
+  /* アクセント色 */
+  --accent-blue: #3b82f6;
+  --accent-green: #10a37f;
+  --accent-purple: #667eea;
+}
+```
+
+**カスタマイズのメリット**:
+- **一貫性**: 全コンポーネントで統一された色使用
+- **保守性**: 色変更が一箇所で完結
+- **テーマ変更**: ダークモード等の実装が容易
 
 ## 主要なアーキテクチャの特徴
 

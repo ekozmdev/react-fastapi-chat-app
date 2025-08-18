@@ -408,34 +408,6 @@ async def delete_conversation(
     return {"message": "deleted"}
 
 
-# Helper Functions
-def should_include_message(message: Message) -> bool:
-    """
-    メッセージをAPI履歴に含めるかを判定
-
-    Chat API送信用のメッセージ履歴を生成する際に、
-    不要なメッセージ（toolメッセージ、tool_calls付きassistantメッセージ）を除外します。
-
-    ## パラメータ
-    - **message**: 判定対象のメッセージオブジェクト
-
-    ## 戻り値
-    - **bool**: メッセージを含める場合True、除外する場合False
-
-    ## 判定ルール
-    - `role: "tool"`: 除外（AI応答に含めない）
-    - `role: "assistant"` with `tool_calls`: 除外（ツール呼び出しメタデータ）
-    - その他: 含める（通常の会話メッセージ）
-    """
-    if message.role == "tool":
-        return False
-    if message.role == "assistant":
-        try:
-            data = json.loads(message.content)
-            return "tool_calls" not in data
-        except json.JSONDecodeError:
-            return True
-    return True
 
 
 # SSE
@@ -498,11 +470,19 @@ async def stream_chat(
             db.add(user_msg)
             db.commit()
 
-            api_messages = [
-                {"role": m.role, "content": m.content}
-                for m in conv.messages
-                if should_include_message(m)
-            ]
+            # OpenAI Agents SDK用メッセージ履歴生成（role: tool → role: assistant変換）
+            # 本来はrole: toolで送信したいが、
+            # tool call用のメッセージ形式に対応すると特殊なassistantメッセージが必要になるため、
+            # ここではrole: toolを一時的にrole: assistantに変換して送信する
+            api_messages = []
+            for m in conv.messages:
+                if m.role == "tool":
+                    api_messages.append({
+                        "role": "assistant",
+                        "content": f"ツール実行結果: {m.content}"
+                    })
+                else:
+                    api_messages.append({"role": m.role, "content": m.content})
 
             assistant_content = ""
             assistant_id = generate_unique_id()
@@ -594,7 +574,7 @@ async def stream_chat(
 
             # ストリーミング完了
             done_event = {"id": assistant_id}
-            yield f"done: {json.dumps(done_event, ensure_ascii=False)}\n"
+            yield f"event: done\ndata: {json.dumps(done_event, ensure_ascii=False)}\n\n"
 
         except Exception as e:
             # エラー送信
@@ -605,7 +585,7 @@ async def stream_chat(
 
     return StreamingResponse(
         generate_sse_stream(),
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",

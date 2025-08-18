@@ -8,7 +8,7 @@ This is a React + FastAPI chat application with real-time Server-Sent Events (SS
 
 - **Frontend**: React + TypeScript (Node.js 22+, Vite 7+)
   - React Router v6 with Outlet pattern for protected routes
-  - Modern folder structure: pages/, auth/, components/ (2025 best practices)
+  - Modern folder structure: pages/, auth/ (2025 best practices)
   - Biome for linting and formatting
 - **Backend**: FastAPI (Python 3.13+) with layered architecture
   - Core layer: config.py, deps.py, security.py
@@ -71,8 +71,6 @@ docker-compose ps       # Check service status
       Chat.tsx          # Main chat page
       Login.tsx         # Login page
       NotFound.tsx      # 404 error page
-    /components/        # Reusable UI components
-      MarkdownRenderer.tsx # Markdown rendering
     /styles/            # Stylesheets
       App.css           # Application-wide styles
       index.css         # Global styles
@@ -117,6 +115,9 @@ compose.yaml            # Docker Compose orchestration
 - **Development**: Vite dev server proxies `/api/*` to FastAPI backend
 - **Production**: Nginx serves React app and proxies API to FastAPI
 - **Real-time**: Server-Sent Events (SSE) streaming for chat responses at `/api/chat/stream/{conversation_id}`
+  - **Standard Compliance**: HTML5 SSE specification compliant (`text/event-stream`, `event:`/`data:` format)
+  - **Event Types**: Standard `event: done` completion events with backward compatibility
+  - **Encoding**: UTF-8 with proper Japanese character support (`ensure_ascii=False`)
 - **REST API**: CRUD operations for conversations and messages
 - **Authentication**: JWT tokens via Authorization header for secure SSE connections
 
@@ -169,6 +170,9 @@ compose.yaml            # Docker Compose orchestration
 - **Dependency Management**: Migrated from Poetry to uv
 - **Development Environment**: Vite v7.0.5, Node.js 22+ requirements
 - **Real-time Communication**: Migrated from WebSocket to Server-Sent Events (SSE)
+  - **Standards Compliance**: Full HTML5 SSE specification compliance (2025 update)
+  - **Event Format**: Standardized `event: name\ndata: content\n\n` format
+  - **Content-Type**: Proper `text/event-stream` MIME type for optimal browser compatibility
 - **LLM Integration**: Migrated from direct OpenAI API calls to openai-agents-python SDK
 - **Architecture**: Implemented layered architecture with core/, db/, schemas/ separation
 - **External API Management**: Implemented clients.py with Dependency Injection + Lifespan Events
@@ -336,6 +340,9 @@ def DATABASE_URL(self) -> str:
 
 ### Code Quality Standards
 - **Technical Debt Elimination**: Complete removal of redundant files, debug comment simplification
+- **Dead Code Removal**: Systematic elimination of unreachable code (case 'tool' statements, unused state variables, duplicate CSS definitions)
+- **Type Definition Cleanup**: Removal of unused TypeScript interfaces (ToolCall interface, obsolete tool_calls properties)
+- **CSS Architecture**: Unified color system with CSS variables replacing hardcoded values, elimination of duplicate spinner definitions
 - **Conditional Logic Simplification**: Extracted should_include_message() function for improved testability
 - **ID Generation Unification**: Unified generate_unique_id() function across 6 locations for consistency
 - **Future Extensibility**: Easy migration to numeric IDs or other formats when needed
@@ -343,6 +350,8 @@ def DATABASE_URL(self) -> str:
 
 ### Advanced Code Quality Practices
 - **Frontend Standards**: 
+  - CSS Variables (Custom Properties) for unified color management (30+ variables replacing hardcoded colors)
+  - Dead code elimination (unreachable case statements, unused type definitions)
   - SVG accessibility compliance (WCAG 2.1 AA)
   - Keyboard navigation implementation
   - TypeScript safety improvements (removed non-null assertions)
@@ -422,10 +431,17 @@ curl -X GET "http://127.0.0.1:8000/api/conversations/$CONV_ID" \
 
 #### Expected Results
 
-**SSE streaming format (with tools):**
-```json
+**SSE streaming format (HTML5 standard compliant):**
+```
+Content-Type: text/event-stream
+
 data: {"role": "tool", "content": "{\"tool_call_id\": \"call_abc123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-02 02:56:41 UTC\", \"status\": \"success\"}", "id": "call_abc123", "timestamp": "2025-08-02T02:56:41.118683+00:00"}
+
 data: {"role": "assistant", "content": "Current", "id": "assistant_id"}
+
+event: done
+data: {"id": "assistant_id"}
+
 ```
 
 **Database storage format:**
@@ -442,6 +458,8 @@ data: {"role": "assistant", "content": "Current", "id": "assistant_id"}
 - ✅ **tool_name**: Correct tool name (not empty string)
 - ✅ **Error-free**: No API errors in mixed sessions
 - ✅ **Conversation continuity**: Normal conversation continues after tool execution
+- ✅ **Standards compliance**: HTML5 SSE format with proper `Content-Type: text/event-stream`
+- ✅ **Event format**: Standard `event: done` completion events properly parsed
 
 ## Pre-Commit Checklist
 

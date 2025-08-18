@@ -1,9 +1,10 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useNavigate, useParams } from 'react-router-dom';
+import remarkGfm from 'remark-gfm';
 import '../styles/App.css';
 import { useAuth } from '../auth/AuthContext';
-import MarkdownRenderer from '../components/MarkdownRenderer';
 import type { Conversation, Message, StreamingMessage } from '../types';
 import {
   findNextConversation,
@@ -29,8 +30,6 @@ const Chat: React.FC = () => {
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // アコーディオン式ツール結果表示の展開状態管理
-  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   // 右サイドバー関連の状態管理
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [selectedToolMessages, setSelectedToolMessages] = useState<Message[]>([]);
@@ -75,12 +74,10 @@ const Chat: React.FC = () => {
 
         const data = await res.json();
 
-        // メッセージを段階的に表示（非同期）
-        setTimeout(() => {
-          setMessages(data.messages);
-          setConversationId(convId);
-          setIsLoadingConversation(false);
-        }, 50); // 少し遅延させてスムーズに表示
+        // メッセージと状態を即座に設定
+        setMessages(data.messages);
+        setConversationId(convId);
+        setIsLoadingConversation(false);
       } catch (err) {
         console.error('Failed to fetch conversation:', err);
         setIsLoadingConversation(false);
@@ -137,81 +134,134 @@ const Chat: React.FC = () => {
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
 
+            let currentEvent = null;
+            let currentData = '';
+            
             for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-
-                  switch (data.role) {
-                    case 'tool':
-                      // ツールメッセージを直接メッセージ履歴に追加
-                      setMessages((prev) => [
-                        ...prev,
-                        {
-                          id: data.id,
-                          role: 'tool',
-                          content: data.content, // JSON文字列
-                          timestamp: data.timestamp || new Date().toISOString(),
-                        },
-                      ]);
-                      break;
-                    case 'assistant':
-                      // assistantメッセージのストリーミング処理
+              if (line.startsWith('event: ')) {
+                // 前のイベントを処理
+                if (currentEvent && currentData) {
+                  try {
+                    const data = JSON.parse(currentData);
+                    if (currentEvent === 'done') {
+                      // ストリーミング完了処理
                       setStreamingMessage((prev) => {
-                        if (!prev) {
-                          // 初回コンテンツの場合、新しいストリーミングメッセージを作成
-                          return {
-                            id: data.id,
-                            content: data.content,
-                            isStreaming: true,
-                          };
+                        if (prev) {
+                          setMessages((m) => [
+                            ...m,
+                            {
+                              id: data.id,
+                              role: 'assistant',
+                              content: prev.content,
+                              timestamp: new Date().toISOString(),
+                            },
+                          ]);
                         }
-                        return {
-                          ...prev,
-                          content: prev.content + data.content,
-                        };
+                        return null;
                       });
-                      break;
-                    default:
-                      // エラー処理（従来形式）
-                      if (data.error) {
-                        console.error('SSE error:', data.error);
-                        setIsLoading(false);
-                        alert(`エラー: ${data.error}`);
+                      setIsLoading(false);
+                      fetchConversations();
+                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
+                      if (newChatIdRef.current) {
+                        navigate(`/chat/${newChatIdRef.current}`);
+                        newChatIdRef.current = null; // クリア
                       }
-                      break;
-                  }
-                } catch (e) {
-                  console.error('Failed to parse SSE data:', e);
-                }
-              } else if (line.startsWith('done: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  // ストリーミング完了処理
-                  setStreamingMessage((prev) => {
-                    if (prev) {
-                      setMessages((m) => [
-                        ...m,
-                        {
-                          id: data.id,
-                          role: 'assistant',
-                          content: prev.content,
-                          timestamp: new Date().toISOString(),
-                        },
-                      ]);
                     }
-                    return null;
-                  });
-                  setIsLoading(false);
-                  fetchConversations();
-                  // 新規チャットの場合、ストリーミング完了後にナビゲーション
-                  if (newChatIdRef.current) {
-                    navigate(`/chat/${newChatIdRef.current}`);
-                    newChatIdRef.current = null; // クリア
+                  } catch (e) {
+                    console.error('Failed to parse event data:', e);
                   }
-                } catch (e) {
-                  console.error('Failed to parse done event:', e);
                 }
+                
+                // 新しいイベントを開始
+                currentEvent = line.slice(7);
+                currentData = '';
+              } else if (line.startsWith('data: ')) {
+                if (currentEvent) {
+                  // イベント内のdata行
+                  currentData = line.slice(6);
+                } else {
+                  // 通常のdataメッセージ（既存のSSE形式）
+                  try {
+                    const data = JSON.parse(line.slice(6));
+
+                    switch (data.role) {
+                      case 'tool':
+                        // ツールメッセージを直接メッセージ履歴に追加
+                        setMessages((prev) => [
+                          ...prev,
+                          {
+                            id: data.id,
+                            role: 'tool',
+                            content: data.content, // JSON文字列
+                            timestamp: data.timestamp || new Date().toISOString(),
+                          },
+                        ]);
+                        break;
+                      case 'assistant':
+                        // assistantメッセージのストリーミング処理
+                        setStreamingMessage((prev) => {
+                          if (!prev) {
+                            // 初回コンテンツの場合、新しいストリーミングメッセージを作成
+                            return {
+                              id: data.id,
+                              content: data.content,
+                              isStreaming: true,
+                            };
+                          }
+                          return {
+                            ...prev,
+                            content: prev.content + data.content,
+                          };
+                        });
+                        break;
+                      default:
+                        // エラー処理（従来形式）
+                        if (data.error) {
+                          console.error('SSE error:', data.error);
+                          setIsLoading(false);
+                          alert(`エラー: ${data.error}`);
+                        }
+                        break;
+                    }
+                  } catch (e) {
+                    console.error('Failed to parse SSE data:', e);
+                  }
+                }
+              } else if (line === '') {
+                // 空行でイベント終了
+                if (currentEvent && currentData) {
+                  try {
+                    const data = JSON.parse(currentData);
+                    if (currentEvent === 'done') {
+                      // ストリーミング完了処理
+                      setStreamingMessage((prev) => {
+                        if (prev) {
+                          setMessages((m) => [
+                            ...m,
+                            {
+                              id: data.id,
+                              role: 'assistant',
+                              content: prev.content,
+                              timestamp: new Date().toISOString(),
+                            },
+                          ]);
+                        }
+                        return null;
+                      });
+                      setIsLoading(false);
+                      fetchConversations();
+                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
+                      if (newChatIdRef.current) {
+                        navigate(`/chat/${newChatIdRef.current}`);
+                        newChatIdRef.current = null; // クリア
+                      }
+                    }
+                  } catch (e) {
+                    console.error('Failed to parse event data:', e);
+                  }
+                }
+                currentEvent = null;
+                currentData = '';
               }
             }
           }
@@ -245,6 +295,12 @@ const Chat: React.FC = () => {
         return;
       }
 
+      // 削除済み会話IDの場合は無視（conversations配列に存在しない）
+      const conversationExists = conversations.some((conv) => conv.id === urlConversationId);
+      if (!conversationExists) {
+        return;
+      }
+
       // 会話IDが異なる場合は常に取得
       if (conversationId !== urlConversationId) {
         setConversationId(urlConversationId);
@@ -258,6 +314,7 @@ const Chat: React.FC = () => {
     conversationId,
     fetchConversation,
     isCreatingNewChat,
+    conversations, // conversations配列も依存に追加
   ]);
 
   // URLクリア処理専用
@@ -467,19 +524,6 @@ const Chat: React.FC = () => {
     return toolMessages;
   };
 
-  // アコーディオン式ツール展開/折りたたみ
-  const toggleToolExpansion = (toolId: string) => {
-    setExpandedTools((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(toolId)) {
-        newSet.delete(toolId);
-      } else {
-        newSet.add(toolId);
-      }
-      return newSet;
-    });
-  };
-
   const renderMessage = (message: Message) => {
     const content = parseMessageContent(message);
 
@@ -493,7 +537,11 @@ const Chat: React.FC = () => {
 
         return (
           <div className="message-text">
-            <MarkdownRenderer content={content.text || message.content} />
+            <div className="markdown-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {content.text || message.content}
+              </ReactMarkdown>
+            </div>
             {relatedTools.length > 0 && (
               <button
                 type="button"
@@ -503,42 +551,6 @@ const Chat: React.FC = () => {
                 🔧 ツール実行結果
               </button>
             )}
-          </div>
-        );
-      }
-      case 'tool': {
-        const isExpanded = expandedTools.has(message.id);
-        return (
-          <div className="tool-message">
-            <button
-              className="tool-header clickable"
-              onClick={() => toggleToolExpansion(message.id)}
-              type="button"
-              aria-expanded={isExpanded}
-              aria-label={`${content.tool_name}の実行結果を${isExpanded ? '折りたたむ' : '展開する'}`}
-            >
-              <div className="tool-icon">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  aria-label="完了"
-                  role="img"
-                >
-                  <path
-                    d="M3 7L6 10L11 4"
-                    stroke="#10b981"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <span className="tool-name">{content.tool_name}</span>
-              <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-            </button>
-            {isExpanded && content.output && <div className="tool-output">{content.output}</div>}
           </div>
         );
       }
@@ -596,7 +608,7 @@ const Chat: React.FC = () => {
           </button>
         </div>
 
-        {/* Phase 8: サイドバー展開時・閉じた時両方で新しいチャットボタン表示 */}
+        {/* サイドバー展開時・閉じた時両方で新しいチャットボタン表示 */}
         <button
           type="button"
           className={`new-chat-btn ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}
@@ -762,7 +774,11 @@ const Chat: React.FC = () => {
                 <div className="message-avatar">AI</div>
                 <div className="message-content">
                   <div className="message-text">
-                    <MarkdownRenderer content={streamingMessage.content} />
+                    <div className="markdown-content">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {streamingMessage.content}
+                      </ReactMarkdown>
+                    </div>
                     {streamingMessage.isStreaming && <span className="typing-indicator">▊</span>}
                   </div>
                 </div>
