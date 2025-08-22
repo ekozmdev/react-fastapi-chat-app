@@ -334,7 +334,10 @@ const Chat: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), []);
+  // メッセージが更新されたら自動スクロール
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, streamingMessage]);
 
   /* ----------------------- handlers --------------------------- */
   const handleNewChat = () => {
