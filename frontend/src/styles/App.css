@@ -938,7 +938,7 @@ body {
 }
 
 .right-sidebar.open {
-  width: 300px;
+  width: 400px;
 }
 
 .right-sidebar.closed {
@@ -1007,7 +1007,7 @@ body {
 }
 
 .tool-result-item .tool-output {
-  font-size: 11px;
+  font-size: 14px;
   font-family: 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
   color: var(--text-code);
   background: var(--code-bg);

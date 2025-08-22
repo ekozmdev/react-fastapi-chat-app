@@ -136,7 +136,7 @@ const Chat: React.FC = () => {
 
             let currentEvent = null;
             let currentData = '';
-            
+
             for (const line of lines) {
               if (line.startsWith('event: ')) {
                 // 前のイベントを処理
@@ -171,7 +171,7 @@ const Chat: React.FC = () => {
                     console.error('Failed to parse event data:', e);
                   }
                 }
-                
+
                 // 新しいイベントを開始
                 currentEvent = line.slice(7);
                 currentData = '';
@@ -581,7 +581,13 @@ const Chat: React.FC = () => {
               return (
                 <div key={toolMsg.id} className="tool-result-item">
                   <h4>{toolContent.tool_name}</h4>
-                  <div className="tool-output">{toolContent.output}</div>
+                  <div className="tool-output">
+                    <div className="markdown-content">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {toolContent.output || ''}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
                   <small className="tool-timestamp">{formatTime(toolMsg.timestamp)}</small>
                 </div>
               );
