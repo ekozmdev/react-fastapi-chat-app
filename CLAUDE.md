@@ -393,7 +393,7 @@ curl -X POST "http://127.0.0.1:8000/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"email": "test@test.com", "password": "test1234"}'
 ```
-**Important**: In Claude Code environment, environment variable configuration is difficult, so obtain the access_token from the response and specify it directly for testing.
+**🚨 IMPORTANT - TOKEN USAGE**: In Claude Code environment, environment variable configuration is difficult, so obtain the access_token from the response and **ALWAYS SPECIFY TOKENS DIRECTLY** in curl commands for testing. Do not use environment variables like `$TOKEN`.
 
 #### Basic Test Examples
 ```bash
