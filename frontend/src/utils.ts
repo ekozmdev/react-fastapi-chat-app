@@ -23,17 +23,7 @@ export const parseMessageContent = (message: Message): MessageContent => {
     }
   }
 
-  if (message.role === 'assistant') {
-    try {
-      // JSON形式の場合
-      return JSON.parse(message.content);
-    } catch {
-      // プレーンテキストの場合
-      return { text: message.content };
-    }
-  }
-
-  // user メッセージはプレーンテキスト
+  // assistant/userメッセージは常にプレーンテキスト
   return { text: message.content };
 };
 
