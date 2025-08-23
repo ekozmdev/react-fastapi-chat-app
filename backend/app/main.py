@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import UTC, datetime
 
 from agents import Agent, Runner
@@ -41,6 +42,9 @@ from .schemas import (
     UserResponse,
     UserUpdateRequest,
 )
+
+# Uvicornのロガーを取得
+logger = logging.getLogger('uvicorn.error')
 
 app = FastAPI(title=settings.APP_TITLE, lifespan=lifespan)
 
@@ -437,6 +441,7 @@ async def stream_chat(
             # 4. Agent実行とイベント処理
             result = Runner.run_streamed(chat_agent, api_messages)
             async for event in result.stream_events():
+                logger.debug(f"Stream Event: {event}")
                 if isinstance(event, RunItemStreamEvent):
                     if event.name == "tool_called":
                         # ツール呼び出し情報を抽出してactive_toolsに保存
