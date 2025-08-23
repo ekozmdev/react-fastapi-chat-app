@@ -385,9 +385,8 @@ async def delete_conversation(
 
 
 # SSE
-@app.post("/api/chat/stream/{conversation_id}")
+@app.post("/api/chat/stream")
 async def stream_chat(
-    conversation_id: str,
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -424,6 +423,22 @@ async def stream_chat(
 
     async def generate_sse_stream():
         try:
+            # conversation_idの取得・生成
+            conversation_id = request.conversation_id
+            is_new_conversation = False
+            if not conversation_id:  # 空文字の場合
+                conversation_id = generate_unique_id()
+                is_new_conversation = True
+            
+            # 新規作成通知をSSEで送信
+            if is_new_conversation:
+                conversation_info = {
+                    "type": "conversation_created",
+                    "conversation_id": conversation_id,
+                    "timestamp": datetime.now(UTC).isoformat()
+                }
+                yield f"data: {json.dumps(conversation_info, ensure_ascii=False)}\n\n"
+            
             # 1. 会話準備とユーザーメッセージ保存
             conv = prepare_conversation_and_user_message(
                 db, conversation_id, current_user.id, request.message

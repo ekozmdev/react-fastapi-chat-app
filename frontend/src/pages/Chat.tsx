@@ -27,7 +27,6 @@ const Chat: React.FC = () => {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<StreamingMessage | null>(null);
-  const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // 右サイドバー関連の状態管理
@@ -37,7 +36,6 @@ const Chat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
-  const newChatIdRef = useRef<string | null>(null);
 
   /* ----------------------- fetch helpers ---------------------- */
   const fetchConversations = useCallback(async (): Promise<void> => {
@@ -92,20 +90,23 @@ const Chat: React.FC = () => {
   );
 
   /* ----------------------- SSE -------------------------- */
-  const startSSEStream = async (convId: string, message: string) => {
+  const startSSEStream = async (conversationId: string, message: string) => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
     try {
       // SSEエンドポイントにPOSTリクエストを送信
-      const response = await fetch(`/api/chat/stream/${convId}`, {
+      const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ 
+          conversation_id: conversationId || "",
+          message 
+        }),
       });
 
       if (!response.ok) {
@@ -161,11 +162,6 @@ const Chat: React.FC = () => {
                       });
                       setIsLoading(false);
                       fetchConversations();
-                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
-                      if (newChatIdRef.current) {
-                        navigate(`/chat/${newChatIdRef.current}`);
-                        newChatIdRef.current = null; // クリア
-                      }
                     }
                   } catch (e) {
                     console.error('Failed to parse event data:', e);
@@ -183,6 +179,17 @@ const Chat: React.FC = () => {
                   // 通常のdataメッセージ（既存のSSE形式）
                   try {
                     const data = JSON.parse(line.slice(6));
+
+                    // 新規会話作成イベントのチェック
+                    if (data.type === 'conversation_created') {
+                      const newConvId = data.conversation_id;
+                      if (!conversationId) {  // 新規チャットの場合
+                        setConversationId(newConvId);
+                        navigate(`/chat/${newConvId}`);
+                        fetchConversations();  // サイドバー更新
+                      }
+                      break;
+                    }
 
                     switch (data.role) {
                       case 'tool':
@@ -250,11 +257,6 @@ const Chat: React.FC = () => {
                       });
                       setIsLoading(false);
                       fetchConversations();
-                      // 新規チャットの場合、ストリーミング完了後にナビゲーション
-                      if (newChatIdRef.current) {
-                        navigate(`/chat/${newChatIdRef.current}`);
-                        newChatIdRef.current = null; // クリア
-                      }
                     }
                   } catch (e) {
                     console.error('Failed to parse event data:', e);
@@ -289,11 +291,6 @@ const Chat: React.FC = () => {
   // 認証完了後の会話復元専用（画面更新対応）
   useEffect(() => {
     if (!isAuthLoading && token && urlConversationId) {
-      // 新規チャット作成中は無視
-      if (isCreatingNewChat) {
-        setIsCreatingNewChat(false);
-        return;
-      }
 
       // 削除済み会話IDの場合は無視（conversations配列に存在しない）
       const conversationExists = conversations.some((conv) => conv.id === urlConversationId);
@@ -313,17 +310,16 @@ const Chat: React.FC = () => {
     urlConversationId,
     conversationId,
     fetchConversation,
-    isCreatingNewChat,
     conversations, // conversations配列も依存に追加
   ]);
 
   // URLクリア処理専用
   useEffect(() => {
-    if (!urlConversationId && conversationId && !isCreatingNewChat) {
+    if (!urlConversationId && conversationId) {
       setConversationId(null);
       setMessages([]);
     }
-  }, [urlConversationId, conversationId, isCreatingNewChat]);
+  }, [urlConversationId, conversationId]);
 
   // コンポーネントがアンマウントされるときのクリーンアップ
   useEffect(() => {
@@ -346,8 +342,6 @@ const Chat: React.FC = () => {
     setMessages([]);
     setInputMessage('');
     setStreamingMessage(null);
-    setIsCreatingNewChat(false); // 新規チャット作成フラグをクリア
-    newChatIdRef.current = null; // 新規チャットIDをクリア
     // 右サイドバーを閉じる
     setRightSidebarOpen(false);
     setSelectedToolMessages([]);
@@ -453,30 +447,8 @@ const Chat: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // 新規チャットの場合はまず会話IDを作成
-      let convId = conversationId;
-      if (!convId) {
-        setIsCreatingNewChat(true); // 新規チャット作成開始
-        const res = await fetch('/api/conversations', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-        const data = await res.json();
-        convId = data.conversation_id;
-        setConversationId(convId);
-        newChatIdRef.current = convId; // 新規チャットIDを保存
-        // ナビゲーションはSSE完了後に行う
-      } else {
-        newChatIdRef.current = null; // 既存チャットの場合はクリア
-      }
-
-      // SSEストリーミング開始
-      if (convId) {
-        await startSSEStream(convId, messageContent);
-      }
+      // シンプル！1回のAPI呼び出しで完結
+      await startSSEStream(conversationId || "", messageContent);
     } catch (err) {
       console.error('Error sending message:', err);
       setIsLoading(false);

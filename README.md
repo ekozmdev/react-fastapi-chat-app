@@ -274,7 +274,7 @@ docker compose up -d
 ## API仕様
 
 ### Server-Sent Events (SSE) エンドポイント
-- `POST /api/chat/stream/{conversation_id}` - リアルタイムチャットストリーミング
+- `POST /api/chat/stream` - リアルタイムチャットストリーミング（conversation_idはリクエストボディで指定）
 
 ### REST エンドポイント
 - `POST /api/conversations` - 新規会話の作成

@@ -9,7 +9,7 @@ class ChatRequest(BaseModel):
     """チャットリクエスト"""
 
     message: str
-    conversation_id: str | None = None
+    conversation_id: str = ""
 
 
 class SSEEvent(BaseModel):

@@ -125,7 +125,7 @@ compose.yaml            # Docker Compose orchestration
 ### Communication
 - **Development**: Vite dev server proxies `/api/*` to FastAPI backend
 - **Production**: Nginx serves React app and proxies API to FastAPI
-- **Real-time**: Server-Sent Events (SSE) streaming for chat responses at `/api/chat/stream/{conversation_id}`
+- **Real-time**: Server-Sent Events (SSE) streaming for chat responses at `/api/chat/stream`
   - **Standard Compliance**: HTML5 SSE specification compliant (`text/event-stream`, `event:`/`data:` format)
   - **Event Types**: Standard `event: done` completion events with backward compatibility
   - **Encoding**: UTF-8 with proper Japanese character support (`ensure_ascii=False`)
@@ -397,40 +397,42 @@ curl -X POST "http://127.0.0.1:8000/api/auth/login" \
 
 #### Basic Test Examples
 ```bash
-# Test without tools
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
+# Test without tools (new conversation)
+curl -X POST "http://127.0.0.1:8000/api/chat/stream" \
   -H "Authorization: Bearer [TOKEN]" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello! How are you?"}'
+  -d '{"conversation_id": "", "message": "Hello! How are you?"}'
 
-# Test with tools
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/test-$(date +%s)" \
+# Test with tools (new conversation)
+curl -X POST "http://127.0.0.1:8000/api/chat/stream" \
   -H "Authorization: Bearer [TOKEN]" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Please tell me the current time using the get_current_time tool"}'
+  -d '{"conversation_id": "", "message": "Please tell me the current time using the get_current_time tool"}'
 ```
 
 #### Mixed Session Testing (Tool and Non-Tool Conversations)
 ```bash
-CONV_ID="mixed-test-$(date +%s)"
-
-# 1. Non-tool conversation
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
-  -H "Authorization: Bearer $TOKEN" \
+# 1. Start new conversation (get conversation_id from SSE response)
+curl -X POST "http://127.0.0.1:8000/api/chat/stream" \
+  -H "Authorization: Bearer [TOKEN]" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello!"}'
+  -d '{"conversation_id": "", "message": "Hello!"}' \
+  | head -1 | grep -o '"conversation_id":"[^"]*"' | cut -d'"' -f4
 
-# 2. Tool execution
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Please get the current time using the get_current_time tool"}'
+# Set CONV_ID from the response above
+CONV_ID="[conversation_id_from_response]"
 
-# 3. Calculate tool
-curl -X POST "http://127.0.0.1:8000/api/chat/stream/$CONV_ID" \
-  -H "Authorization: Bearer $TOKEN" \
+# 2. Tool execution in existing conversation
+curl -X POST "http://127.0.0.1:8000/api/chat/stream" \
+  -H "Authorization: Bearer [TOKEN]" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Please calculate 10 + 15"}'
+  -d '{"conversation_id": "'$CONV_ID'", "message": "Please get the current time using the get_current_time tool"}'
+
+# 3. Calculate tool in existing conversation
+curl -X POST "http://127.0.0.1:8000/api/chat/stream" \
+  -H "Authorization: Bearer [TOKEN]" \
+  -H "Content-Type: application/json" \
+  -d '{"conversation_id": "'$CONV_ID'", "message": "Please calculate 10 + 15"}'
 ```
 
 #### Data Consistency Verification
@@ -445,6 +447,8 @@ curl -X GET "http://127.0.0.1:8000/api/conversations/$CONV_ID" \
 **SSE streaming format (HTML5 standard compliant):**
 ```
 Content-Type: text/event-stream
+
+data: {"type": "conversation_created", "conversation_id": "conv_789e0123-e89b-12d3-a456-426614174000", "timestamp": "2025-08-23T02:56:40.000000+00:00"}
 
 data: {"role": "tool", "content": "{\"tool_call_id\": \"call_abc123\", \"tool_name\": \"get_current_time\", \"output\": \"2025-08-02 02:56:41 UTC\", \"status\": \"success\"}", "id": "call_abc123", "timestamp": "2025-08-02T02:56:41.118683+00:00"}
 
