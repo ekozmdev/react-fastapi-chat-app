@@ -40,7 +40,6 @@ from .schemas import (
     LoginRequest,
     Token,
     UserResponse,
-    UserUpdateRequest,
 )
 
 # Uvicornのロガーを取得
@@ -136,117 +135,11 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return create_user_response(current_user)
 
 
-@app.put("/api/auth/me", response_model=UserResponse)
-async def update_user_info(
-    update_data: UserUpdateRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    ユーザー情報更新
-
-    認証されたユーザーのユーザー名やパスワードを更新します。
-
-    ## 認証
-    - **Authorization**: Bearer トークンが必要
-
-    ## パラメータ
-    - **username**: 新しいユーザー名（オプション）
-    - **current_password**: 現在のパスワード（パスワード変更時必要）
-    - **new_password**: 新しいパスワード（オプション）
-
-    ## レスポンス
-    - **id**: ユーザーID（UUID）
-    - **email**: メールアドレス
-    - **username**: 更新後のユーザー名
-    - **is_active**: アカウント有効状態
-    - **created_at**: アカウント作成日時
-
-    ## エラー
-    - **400**: ユーザー名重複またはパスワード不一致
-    - **401**: トークンが無効または期限切れ
-    - **422**: リクエストデータ形式エラー
-    """
-    # ユーザー名の更新
-    if update_data.username is not None:
-        # 重複チェック
-        existing_user = (
-            db.query(User)
-            .filter(User.username == update_data.username, User.id != current_user.id)
-            .first()
-        )
-        if existing_user:
-            raise HTTPException(status_code=400, detail="Username already exists")
-        current_user.username = update_data.username
-
-    # パスワードの更新
-    if update_data.new_password is not None:
-        if update_data.current_password is None:
-            raise HTTPException(status_code=400, detail="Current password is required")
-
-        if not verify_password(
-            update_data.current_password, current_user.password_hash
-        ):
-            raise HTTPException(status_code=400, detail="Incorrect current password")
-
-        current_user.password_hash = get_password_hash(update_data.new_password)
-
-    current_user.updated_at = datetime.now(UTC)
-    db.commit()
-
-    return create_user_response(current_user)
-
-
-@app.delete("/api/auth/logout")
-async def logout(current_user: User = Depends(get_current_user)):
-    """
-    ユーザーログアウト
-
-    ユーザーをログアウトします。クライアント側でトークンを削除する必要があります。
-
-    ## 認証
-    - **Authorization**: Bearer トークンが必要
-
-    ## レスポンス
-    - **message**: ログアウト成功メッセージ
-
-    ## エラー
-    - **401**: トークンが無効または期限切れ
-    """
-    return {"message": "Successfully logged out"}
 
 
 # REST
 
 
-@app.post("/api/conversations")
-async def create_conversation(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
-    """
-    新しい会話作成
-
-    認証されたユーザー用に新しい会話セッションを作成します。
-
-    ## 認証
-    - **Authorization**: Bearer トークンが必要
-
-    ## レスポンス
-    - **conversation_id**: 作成された会話ID（UUID）
-    - **created_at**: 作成日時
-    - **updated_at**: 更新日時
-
-    ## エラー
-    - **401**: トークンが無効または期限切れ
-    """
-    conv = Conversation(user_id=current_user.id)
-    db.add(conv)
-    db.commit()
-    return {
-        "conversation_id": conv.id,
-        "created_at": conv.created_at,
-        "updated_at": conv.updated_at,
-    }
 
 
 @app.get("/api/conversations")

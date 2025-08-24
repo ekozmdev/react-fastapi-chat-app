@@ -151,20 +151,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // ユーザー情報更新
-  const updateUser = (userData: Partial<User>) => {
-    setAuthState((prev) => ({
-      ...prev,
-      user: prev.user ? { ...prev.user, ...userData } : null,
-    }));
-  };
 
   const value: AuthContextType = {
     ...authState,
     login,
     logout,
     refreshToken,
-    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

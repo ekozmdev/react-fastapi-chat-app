@@ -30,9 +30,3 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
-class UserUpdateRequest(BaseModel):
-    """ユーザー情報更新リクエスト"""
-
-    username: str | None = None
-    current_password: str | None = None
-    new_password: str | None = None
