@@ -151,7 +151,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-
   const value: AuthContextType = {
     ...authState,
     login,
