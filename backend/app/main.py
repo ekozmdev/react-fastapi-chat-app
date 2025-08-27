@@ -15,18 +15,14 @@ from sqlalchemy.orm import Session
 from .clients import get_chat_agent, lifespan
 from .core.config import settings
 from .core.deps import get_current_user as get_current_user_dep
-from .core.security import (
-    authenticate_user,
-    get_password_hash,
-    verify_password,
-)
+from .core.security import authenticate_user
 from .core.utils import generate_unique_id
 from .db.session import get_db
 from .helper import (
     convert_messages_for_openai_api,
     create_assistant_content_sse_event,
-    create_tool_output_sse_event,
     create_token_response,
+    create_tool_output_sse_event,
     create_user_response,
     extract_tool_call_info,
     finalize_conversation,
@@ -322,7 +318,7 @@ async def stream_chat(
             if not conversation_id:  # 空文字の場合
                 conversation_id = generate_unique_id()
                 is_new_conversation = True
-            
+
             # 新規作成通知をSSEで送信
             if is_new_conversation:
                 conversation_info = {
@@ -331,7 +327,7 @@ async def stream_chat(
                     "timestamp": datetime.now(UTC).isoformat()
                 }
                 yield f"data: {json.dumps(conversation_info, ensure_ascii=False)}\n\n"
-            
+
             # 1. 会話準備とユーザーメッセージ保存
             conv = prepare_conversation_and_user_message(
                 db, conversation_id, current_user.id, request.message
