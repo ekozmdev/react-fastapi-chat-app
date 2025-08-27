@@ -1,6 +1,6 @@
 """Pydanticスキーマモジュール"""
 
-from .auth import LoginRequest, Token, UserResponse, UserUpdateRequest
+from .auth import LoginRequest, Token, UserResponse
 from .common import ChatRequest, SSEEvent
 
 __all__ = [
@@ -8,7 +8,6 @@ __all__ = [
     "LoginRequest",
     "Token",
     "UserResponse",
-    "UserUpdateRequest",
     # 共通
     "ChatRequest",
     "SSEEvent",
