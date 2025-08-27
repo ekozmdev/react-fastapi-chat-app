@@ -6,7 +6,7 @@ React + Viteフロントエンド、FastAPI + uvバックエンド、PostgreSQL�
 
 ## 技術スタック
 
-- **フロントエンド**: React + TypeScript + Vite 7 + React Router v6 + Biome
+- **フロントエンド**: React + TypeScript + Vite 7 + React Router v7 + Biome
 - **バックエンド**: FastAPI 0.116+ + uv + Python 3.13 + Ruff
 - **データベース**: PostgreSQL 16 + SQLAlchemy 2.0 + Alembic
 - **認証**: JWT + bcrypt/Argon2
@@ -56,8 +56,7 @@ react-fastapi-chat-app/
 │   │   │   └── user.py
 │   │   ├── schemas/
 │   │   │   ├── auth.py
-│   │   │   ├── common.py
-│   │   │   └── conversation.py
+│   │   │   └── common.py
 │   │   ├── clients.py
 │   │   ├── main.py
 │   │   ├── tools.py
@@ -86,7 +85,7 @@ react-fastapi-chat-app/
 - **Claudeライクなデザイン**: モダンでクリーンなUI
 - **会話履歴**: PostgreSQLデータベースでチャット履歴を永続化（ユーザー別）
 - **会話管理**: 複数の会話を作成・切り替え・削除
-- **モダンルーティング**: React Router v6のOutletパターンによる保護ルート実装
+- **モダンルーティング**: React Router v7のOutletパターンによる保護ルート実装
 - **404エラーハンドリング**: ユーザーフレンドリーな専用エラーページ（`/not-found-error`）
 - **画面更新対応**: 会話URL直アクセス時の履歴復元（useEffect最適化）
 - **レスポンシブデザイン**: モバイル対応
@@ -111,22 +110,25 @@ cp .env.example .env
 # OPENAI_API_KEY=sk-...
 ```
 
-**DATABASE_URLについて**
+**データベース設定について**
 
-本プロジェクトではPostgreSQLドライバーとしてpsycopg3を使用しているため、DATABASE_URLのプロトコルは `postgresql+psycopg://` を指定します。
+本プロジェクトでは個別コンポーネント設定を使用してDATABASE_URLを動的構築します。
 
 ```bash
-# 正しい形式（psycopg3使用）
-DATABASE_URL=postgresql+psycopg://chatuser:chatpassword@localhost:5432/chatdb
-
-# 古い形式（psycopg2）は使用しない
-# DATABASE_URL=postgresql://chatuser:chatpassword@localhost:5432/chatdb
+# 個別コンポーネント設定（推奨）
+DB_PROTOCOL=postgresql+psycopg
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=chatuser
+DB_PASSWORD=chatpassword
+DB_NAME=chatdb
 ```
 
-psycopg3の利点：
-- 非同期処理のネイティブサポート
-- 優れたパフォーマンス
-- モダンなPython 3.8+対応
+設定の利点：
+- 環境別設定の柔軟性
+- セキュリティ（パスワード分離）
+- Docker環境との互換性
+- psycopg3ドライバーによる高性能
 
 ### 3. Dockerを使用した起動
 
@@ -235,7 +237,7 @@ npm run check   # Biome check
 - **SSE認証**: AuthorizationヘッダーでJWTトークンを送信
 - **自動ログイン**: JWTトークンがlocalStorageに保存される
 
-### ルーティング（React Router v6 Outlet パターン）
+### ルーティング（React Router v7 Outlet パターン）
 
 - `/` - メインチャット画面（認証必須）
 - `/login` - ログインページ（認証済みの場合は自動リダイレクト）
@@ -277,7 +279,6 @@ docker compose up -d
 - `POST /api/chat/stream` - リアルタイムチャットストリーミング（conversation_idはリクエストボディで指定）
 
 ### REST エンドポイント
-- `POST /api/conversations` - 新規会話の作成
 - `GET /api/conversations` - 会話一覧の取得
 - `GET /api/conversations/{conversation_id}` - 特定の会話の詳細
 - `DELETE /api/conversations/{conversation_id}` - 会話の削除
@@ -286,8 +287,6 @@ docker compose up -d
 - `POST /api/auth/login` - ユーザーログイン
 - `POST /api/auth/refresh` - トークンリフレッシュ
 - `GET /api/auth/me` - 現在のユーザー情報取得
-- `PUT /api/auth/me` - ユーザー情報更新
-- `DELETE /api/auth/logout` - ログアウト
 
 ## データベーススキーマ
 
@@ -566,7 +565,7 @@ uv export --format requirements-txt --dev --output-file requirements_dev.txt  # 
 
 ### データベース接続エラー
 - PostgreSQLが起動しているか確認
-- `.env`ファイルのDATABASE_URLが正しいか確認
+- `.env`ファイルのデータベース設定（DB_PROTOCOL, DB_HOST等）が正しいか確認
 - Docker使用時は`docker compose ps`でpostgresサービスが起動しているか確認
 
 ### SSE接続エラー
@@ -602,7 +601,7 @@ uv sync --no-cache
 
 **最新バージョン** (2025年8月)
 - **Phase 3完了**: SDK イベント処理の根本的リファクタリング、RunItemStreamEvent活用による安定性向上
-- **フロントエンドアーキテクチャ現代化**: React Router v6 Outlet パターン、pages/構造、BrowserRouter最適配置
+- **フロントエンドアーキテクチャ現代化**: React Router v7 Outlet パターン、pages/構造、BrowserRouter最適配置
 - **データ構造シンプル化**: role:toolメッセージ形式採用、tool_execution削除、SSEストリーミング安定化
 - **レイヤー型アーキテクチャ**: core/, db/, schemas/, models/分離、外部APIクライアント管理
 - **開発環境最新化**: openai-agents-python SDK導入、Vite v7.0.5対応、uv移行完了

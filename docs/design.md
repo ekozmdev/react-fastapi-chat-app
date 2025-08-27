@@ -217,13 +217,10 @@ app/
 POST /api/auth/login      # ログイン
 POST /api/auth/refresh    # トークンリフレッシュ  
 GET  /api/auth/me         # ユーザー情報取得
-PUT  /api/auth/me         # ユーザー情報更新
-DELETE /api/auth/logout   # ログアウト
 ```
 
 **会話API**
 ```python
-POST   /api/conversations              # 新規会話作成
 GET    /api/conversations              # 会話一覧
 GET    /api/conversations/{id}         # 会話詳細
 DELETE /api/conversations/{id}         # 会話削除
@@ -301,20 +298,7 @@ GET /api/auth/me (認証必須)
 
 ### 会話管理エンドポイント
 
-**1. 新規会話作成**
-```
-POST /api/conversations (認証必須)
-```
-**レスポンス** (200):
-```json
-{
-  "conversation_id": "conv_123e4567-e89b-12d3-a456-426614174000",
-  "created_at": "2025-08-23T12:00:00Z",
-  "updated_at": "2025-08-23T12:00:00Z"
-}
-```
-
-**2. 会話一覧取得**
+**1. 会話一覧取得**
 ```
 GET /api/conversations?skip=0&limit=20 (認証必須)
 ```
@@ -333,7 +317,7 @@ GET /api/conversations?skip=0&limit=20 (認証必須)
 }
 ```
 
-**3. 特定会話の詳細取得**
+**2. 特定会話の詳細取得**
 ```
 GET /api/conversations/{conversation_id} (認証必須)
 ```
