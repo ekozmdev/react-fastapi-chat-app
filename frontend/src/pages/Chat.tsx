@@ -35,7 +35,6 @@ const Chat: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   /* ----------------------- fetch helpers ---------------------- */
   const fetchConversations = useCallback(async (): Promise<void> => {
@@ -91,10 +90,6 @@ const Chat: React.FC = () => {
 
   /* ----------------------- SSE -------------------------- */
   const startSSEStream = async (conversationId: string, message: string) => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-
     try {
       // SSEエンドポイントにPOSTリクエストを送信
       const response = await fetch('/api/chat/stream', {
@@ -321,14 +316,6 @@ const Chat: React.FC = () => {
     }
   }, [urlConversationId, conversationId]);
 
-  // コンポーネントがアンマウントされるときのクリーンアップ
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-    };
-  }, []);
 
   // メッセージが更新されたら自動スクロール
   useEffect(() => {
@@ -345,11 +332,6 @@ const Chat: React.FC = () => {
     // 右サイドバーを閉じる
     setRightSidebarOpen(false);
     setSelectedToolMessages([]);
-    // SSE接続を明示的に閉じる
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
   };
 
   const handleSelectConversation = (conv: Conversation) => {
@@ -358,11 +340,6 @@ const Chat: React.FC = () => {
     // 右サイドバーを閉じる
     setRightSidebarOpen(false);
     setSelectedToolMessages([]);
-    // 既存のSSE接続を閉じる
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
   };
 
   /**
@@ -385,10 +362,6 @@ const Chat: React.FC = () => {
     // 共通クリーンアップ処理
     setRightSidebarOpen(false);
     setSelectedToolMessages([]);
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
   };
 
   const handleDeleteConversation = async (convId: string, e: React.MouseEvent) => {
