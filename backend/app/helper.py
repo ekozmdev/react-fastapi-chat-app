@@ -54,7 +54,6 @@ def prepare_conversation_and_user_message(
     db: Session, conversation_id: str, user_id: str, message: str
 ) -> Conversation:
     """会話を準備してユーザーメッセージを保存"""
-    # 会話取得または作成
     conv = (
         db.query(Conversation)
         .filter(
@@ -65,9 +64,20 @@ def prepare_conversation_and_user_message(
     )
 
     if not conv:
+        # 同じIDの会話が他ユーザーに属していないか確認
+        conflict_conv = (
+            db.query(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .first()
+        )
+        if conflict_conv:
+            raise HTTPException(404, "Conversation not found")
+
+        # 指定のIDが存在しない場合は新規作成
         conv = Conversation(id=conversation_id, user_id=user_id)
         db.add(conv)
         db.commit()
+        db.refresh(conv)
 
     # ユーザーメッセージ保存
     user_msg = Message(conversation_id=conv.id, role="user", content=message)
@@ -104,12 +114,19 @@ def create_tool_output_sse_event(
     event: RunItemStreamEvent, active_tools: dict
 ) -> tuple[str, dict, str] | None:
     """ツール出力のSSEイベントを生成（副作用なし）"""
-    try:
-        call_id = event.item.raw_item["call_id"]
-        output = event.item.output
-        tool_name = active_tools.get(call_id, "unknown")
-    except (KeyError, TypeError):
+    raw_item = getattr(event.item, "raw_item", None)
+    output = getattr(event.item, "output", None)
+
+    if raw_item is None or output is None:
         return None
+
+    call_id = getattr(raw_item, "call_id", None)
+    if call_id is None and isinstance(raw_item, dict):
+        call_id = raw_item.get("call_id")
+    if call_id is None:
+        return None
+
+    tool_name = active_tools.get(call_id, "unknown")
 
     tool_content_dict = {
         "tool_call_id": call_id,
