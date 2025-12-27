@@ -21,13 +21,14 @@ from .core.security import (
 )
 from .core.utils import generate_unique_id
 from .db.session import get_db
-from .helper import (
+from .services.auth import create_token_response, create_user_response
+from .services.chat_stream import (
     convert_messages_for_openai_api,
     create_assistant_content_sse_event,
     create_tool_output_sse_event,
-    create_token_response,
-    create_user_response,
     extract_tool_call_info,
+)
+from .services.conversations import (
     finalize_conversation,
     get_user_conversation,
     prepare_conversation_and_user_message,
@@ -447,15 +448,12 @@ async def stream_chat(
 
                     elif event.name == "tool_output":
                         # ツール出力を処理（純粋関数）
-                        tool_response = create_tool_output_sse_event(
-                            event, active_tools
-                        )
-                        if tool_response:
-                            sse_event, db_message, call_id = tool_response
-                            yield sse_event
-                            sent_tool_messages.append(db_message)
+                        tool_event = create_tool_output_sse_event(event, active_tools)
+                        if tool_event:
+                            yield tool_event.sse_event
+                            sent_tool_messages.append(tool_event.db_message)
                             # 完了したツールをactive_toolsから削除
-                            active_tools.pop(call_id, None)
+                            active_tools.pop(tool_event.call_id, None)
 
                 elif isinstance(event, RawResponsesStreamEvent):
                     if isinstance(event.data, ResponseTextDeltaEvent):
